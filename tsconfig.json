@@ -13,6 +13,6 @@
     "types": ["bun-types"],
     "lib": ["ESNext"]
   },
-  "include": ["src/**/*.ts", "refs/**/*.ts"],
+  "include": ["src/**/*.ts", "refs/**/*.ts", "plugins/**/*.ts"],
   "exclude": ["node_modules"]
 }

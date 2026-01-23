@@ -82,7 +82,7 @@ const BUILTIN_PRESETS: Record<string, PresetConfig> = {
       number_sections: true,
     },
     pandoc: {
-      from: "markdown+smart+tables",
+      from: "markdown+smart+pipe_tables",
       variables: {
         "top-margin": "2.5cm",
         "bottom-margin": "2.5cm",

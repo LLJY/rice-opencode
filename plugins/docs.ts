@@ -248,7 +248,10 @@ export const DocsPlugin: Plugin = async (ctx) => {
           project_title: tool.schema.string().optional(),
           group: tool.schema.string().optional().describe("Group name/number"),
           author: tool.schema.string().optional().describe("Single author name"),
+          authors: tool.schema.string().optional().describe("JSON array of student objects: [{name, sit_id, glasgow_id}, ...]"),
           date: tool.schema.string().optional(),
+          version: tool.schema.string().optional().describe("Document version (e.g., '1.1')"),
+          project_topic_id: tool.schema.string().optional().describe("Project topic ID (e.g., 'N')"),
           include_toc: tool.schema.boolean().optional().describe("Include table of contents (default: true)"),
         },
         async execute(args) {
@@ -300,8 +303,31 @@ export const DocsPlugin: Plugin = async (ctx) => {
           if (args.group) builder.variable("group", args.group);
           if (args.date) builder.variable("date", args.date);
 
-          // Single author (for authors table, use YAML front matter in the markdown file)
-          if (args.author) {
+          // Version and Project Topic ID (optional)
+          if (args.version) builder.variable("version", args.version);
+          if (args.project_topic_id) builder.variable("project-topic-id", args.project_topic_id);
+
+          // Authors table - parse JSON and create metadata file
+          let metaFileToCleanup: string | null = null;
+          if (args.authors) {
+            try {
+              const authorsArray = JSON.parse(args.authors) as Array<{ name: string; sit_id: string; glasgow_id: string }>;
+              // Build YAML content
+              const yamlLines = ["authors:"];
+              for (const author of authorsArray) {
+                yamlLines.push(`  - name: "${author.name}"`);
+                yamlLines.push(`    sit-id: "${author.sit_id}"`);
+                yamlLines.push(`    glasgow-id: "${author.glasgow_id}"`);
+              }
+              metaFileToCleanup = `/tmp/pandoc-authors-${Date.now()}.yaml`;
+              const yamlContent = yamlLines.join("\n");
+              await Bun.write(metaFileToCleanup, yamlContent);
+              builder.metadataFile(metaFileToCleanup);
+            } catch (e) {
+              throw new Error(`Invalid authors JSON: ${e}`);
+            }
+          } else if (args.author) {
+            // Single author fallback
             builder.variable("author", args.author);
           }
 
@@ -317,6 +343,12 @@ export const DocsPlugin: Plugin = async (ctx) => {
 
           const result = await builder.execute();
           if (!result.success) throw new Error(`Failed:\n${result.error}`);
+
+          // Cleanup metadata file if created
+          if (metaFileToCleanup) {
+            try { await Bun.spawn(["rm", "-f", metaFileToCleanup]).exited; } catch { /* ignore cleanup errors */ }
+          }
+
           return `Created school report: ${outputPath}\nLogo: ${args.logo || "none"}\nMargins: ${args.margin || "custom/default"}`;
         },
       }),
