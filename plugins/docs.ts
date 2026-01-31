@@ -2,6 +2,104 @@ import { type Plugin, tool } from "@opencode-ai/plugin";
 import { TemplateResolver } from "../src/template-resolver";
 import { PresetManager } from "../src/preset-manager";
 import { pandoc, computeOutputPath } from "../src/pandoc-builder";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { join, dirname } from "path";
+
+// Human-readable ID generation (Claude-style: purple-squirrel-482)
+const ADJECTIVES = [
+  "amber", "ancient", "autumn", "bold", "brave", "bright", "calm", "clever", "cool", "crimson",
+  "curious", "daring", "deep", "eager", "elegant", "fierce", "gentle", "golden", "graceful", "happy",
+  "hidden", "jade", "joyful", "kind", "lively", "lucky", "mighty", "misty", "modern", "mystic",
+  "noble", "peaceful", "purple", "quiet", "rapid", "royal", "rustic", "serene", "silent", "silver",
+  "smooth", "solid", "spring", "steady", "summer", "swift", "tender", "vivid", "warm", "wild",
+  "wise", "young", "zealous", "azure", "blazing", "breezy", "cosmic", "crystal", "dawn", "dusk"
+];
+
+const NOUNS = [
+  "apple", "arrow", "autumn", "beach", "bird", "bloom", "breeze", "brook", "canyon", "cloud",
+  "coral", "crane", "crystal", "dolphin", "dream", "eagle", "field", "flame", "flower", "forest",
+  "fountain", "garden", "gate", "glade", "grove", "harbor", "haven", "hill", "horizon", "island",
+  "journey", "lake", "leaf", "meadow", "mirror", "mist", "moon", "mountain", "night", "ocean",
+  "orchard", "peak", "pine", "pond", "rain", "ravine", "river", "road", "rock", "rose",
+  "sands", "sea", "shade", "sky", "spring", "star", "stone", "stream", "sun", "sunset",
+  "surf", "swan", "tide", "tower", "tree", "valley", "wave", "willow", "wind", "wood"
+];
+
+function generateDocId(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const num = Math.floor(Math.random() * 900) + 100; // 3-digit number
+  return `${adj}-${noun}-${num}`;
+}
+
+// Get the docs directory path (project-local .opencode/docs)
+function getDocsBasePath(ctx: { worktree?: string; directory: string }): string {
+  const base = ctx.worktree || ctx.directory;
+  return join(base, ".opencode", "docs");
+}
+
+function getRegistryPath(ctx: { worktree?: string; directory: string }): string {
+  const base = ctx.worktree || ctx.directory;
+  return join(base, ".opencode", "docs-registry.json");
+}
+
+// Ensure directories exist
+function ensureDocsDir(ctx: { worktree?: string; directory: string }): void {
+  const basePath = getDocsBasePath(ctx);
+  if (!existsSync(basePath)) {
+    mkdirSync(basePath, { recursive: true });
+  }
+}
+
+// Read/write registry
+interface DocRegistry {
+  drafts: Record<string, {
+    title: string;
+    preset: string;
+    created_at: string;
+    last_modified: string;
+    source_markdown?: string;
+    status: "draft" | "compiled";
+  }>;
+}
+
+function readRegistry(ctx: { worktree?: string; directory: string }): DocRegistry {
+  const path = getRegistryPath(ctx);
+  if (!existsSync(path)) {
+    return { drafts: {} };
+  }
+  try {
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    return { drafts: {} };
+  }
+}
+
+function writeRegistry(ctx: { worktree?: string; directory: string }, registry: DocRegistry): void {
+  const path = getRegistryPath(ctx);
+  const dir = dirname(path);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(path, JSON.stringify(registry, null, 2));
+}
+
+// Generate unique doc ID
+function generateUniqueDocId(ctx: { worktree?: string; directory: string }): string {
+  const registry = readRegistry(ctx);
+  let id: string;
+  let attempts = 0;
+  do {
+    id = generateDocId();
+    attempts++;
+  } while (registry.drafts[id] && attempts < 100);
+  
+  if (attempts >= 100) {
+    // Fallback: append timestamp
+    id = `${generateDocId()}-${Date.now()}`;
+  }
+  return id;
+}
 
 export const DocsPlugin: Plugin = async (ctx) => {
   const resolver = new TemplateResolver({ projectRoot: ctx.worktree || ctx.directory });
@@ -9,6 +107,264 @@ export const DocsPlugin: Plugin = async (ctx) => {
 
   return {
     tool: {
+      docs_draft: tool({
+        description: "Create a document draft with a unique ID for iterative editing. Generates a project-local intermediate that can be edited and compiled multiple times.",
+        args: {
+          title: tool.schema.string().describe("Document title"),
+          preset: tool.schema.string().describe("Preset name (use docs_presets_list to see options)"),
+          initial_content: tool.schema.string().optional().describe("Initial markdown content. If not provided, creates an empty draft."),
+          source_markdown: tool.schema.string().optional().describe("Path to existing markdown file to use as initial content"),
+        },
+        async execute(args) {
+          ensureDocsDir(ctx);
+          
+          const docId = generateUniqueDocId(ctx);
+          const draftDir = join(getDocsBasePath(ctx), docId);
+          mkdirSync(draftDir, { recursive: true });
+          
+          // Get initial content
+          let content = "";
+          if (args.initial_content) {
+            content = args.initial_content;
+          } else if (args.source_markdown && existsSync(args.source_markdown)) {
+            content = readFileSync(args.source_markdown, "utf-8");
+          }
+          
+          // Add YAML frontmatter if not present
+          if (!content.startsWith("---")) {
+            const frontmatter = [
+              "---",
+              `title: "${args.title}"`,
+              `date: "${new Date().toISOString().split("T")[0]}"`,
+              "---",
+              "",
+            ].join("\n");
+            content = frontmatter + content;
+          }
+          
+          // Write draft markdown
+          const draftPath = join(draftDir, "draft.md");
+          writeFileSync(draftPath, content);
+          
+          // Write metadata
+          const metaPath = join(draftDir, "meta.json");
+          const meta = {
+            title: args.title,
+            preset: args.preset,
+            created_at: new Date().toISOString(),
+            last_modified: new Date().toISOString(),
+            source_markdown: args.source_markdown,
+            status: "draft",
+          };
+          writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+          
+          // Update registry
+          const registry = readRegistry(ctx);
+          registry.drafts[docId] = {
+            title: args.title,
+            preset: args.preset,
+            created_at: meta.created_at,
+            last_modified: meta.last_modified,
+            source_markdown: args.source_markdown,
+            status: "draft",
+          };
+          writeRegistry(ctx, registry);
+          
+          return [
+            `Draft created: ${args.title}`,
+            ``,
+            `Document ID: ${docId}`,
+            `Draft path: ${draftPath}`,
+            `Preset: ${args.preset}`,
+            ``,
+            `Next steps:`,
+            `1. Edit the draft: ${draftPath}`,
+            `2. Compile when ready: docs_compile doc_id="${docId}"`,
+          ].join("\n");
+        },
+      }),
+
+      docs_list_drafts: tool({
+        description: "List all active document drafts in the current project.",
+        args: {},
+        async execute() {
+          const registry = readRegistry(ctx);
+          const drafts = Object.entries(registry.drafts);
+          
+          if (drafts.length === 0) {
+            return "No active drafts. Create one with docs_draft.";
+          }
+          
+          const lines = ["Active document drafts:", ""];
+          for (const [id, info] of drafts) {
+            const draftPath = join(getDocsBasePath(ctx), id, "draft.md");
+            const exists = existsSync(draftPath);
+            const status = exists ? info.status : "missing";
+            lines.push(`${id}`);
+            lines.push(`  Title: ${info.title}`);
+            lines.push(`  Preset: ${info.preset}`);
+            lines.push(`  Status: ${status}`);
+            lines.push(`  Modified: ${info.last_modified.split("T")[0]}`);
+            lines.push(`  Path: ${draftPath}`);
+            lines.push("");
+          }
+          return lines.join("\n");
+        },
+      }),
+
+      docs_compile: tool({
+        description: "Compile a drafted document to PDF. Uses the preset and metadata from when the draft was created.",
+        args: {
+          doc_id: tool.schema.string().describe("Document ID (e.g., 'purple-squirrel-482')"),
+          output_path: tool.schema.string().optional().describe("Custom output path for PDF. If omitted, saves next to draft."),
+          // Allow overriding specific metadata at compile time
+          author: tool.schema.string().optional(),
+          date: tool.schema.string().optional(),
+          subtitle: tool.schema.string().optional(),
+          abstract: tool.schema.string().optional(),
+          keywords: tool.schema.string().optional(),
+          bibliography: tool.schema.string().optional().describe("Path to .bib file"),
+          // School report specific
+          logo: tool.schema.string().optional().describe("Logo option (sit, uofg, both) - for school-report preset"),
+          course: tool.schema.string().optional(),
+          project_title: tool.schema.string().optional(),
+          group: tool.schema.string().optional(),
+          authors: tool.schema.string().optional().describe("JSON array for authors table: [{name, sit_id, glasgow_id}, ...]"),
+          version: tool.schema.string().optional(),
+          project_topic_id: tool.schema.string().optional(),
+        },
+        async execute(args) {
+          const registry = readRegistry(ctx);
+          const draftInfo = registry.drafts[args.doc_id];
+          
+          if (!draftInfo) {
+            return `Draft not found: ${args.doc_id}. Use docs_list_drafts to see available drafts.`;
+          }
+          
+          const draftDir = join(getDocsBasePath(ctx), args.doc_id);
+          const draftPath = join(draftDir, "draft.md");
+          
+          if (!existsSync(draftPath)) {
+            return `Draft file missing: ${draftPath}`;
+          }
+          
+          // Update last modified
+          draftInfo.last_modified = new Date().toISOString();
+          draftInfo.status = "compiled";
+          writeRegistry(ctx, registry);
+          
+          // Determine output path
+          const outputPath = args.output_path || join(draftDir, `${args.doc_id}.pdf`);
+          
+          // Load preset
+          const preset = await presetManager.loadPreset(draftInfo.preset, args.logo);
+          
+          // Build pandoc command
+          const builder = pandoc().input(draftPath).output(outputPath);
+          
+          // Apply preset
+          if (preset.template?.path && !preset.resolved_template_path) {
+            throw new Error(`Template '${preset.template.path}' not found. Use docs_templates_install.`);
+          }
+          
+          builder.applyPreset(preset).listings();
+          
+          // Apply metadata overrides
+          const metadata: Record<string, string> = {};
+          if (args.author) metadata.author = args.author;
+          if (args.date) metadata.date = args.date;
+          if (args.subtitle) metadata.subtitle = args.subtitle;
+          if (args.abstract) metadata.abstract = args.abstract;
+          if (args.keywords) metadata.keywords = args.keywords;
+          if (Object.keys(metadata).length > 0) {
+            builder.applyMetadata(metadata);
+          }
+          
+          // Bibliography
+          if (args.bibliography) builder.bibliography(args.bibliography);
+          
+          // School report specific variables
+          if (args.logo) {
+            const assetsDir = resolver.getUserConfigDir() + "/pandoc/assets";
+            if (args.logo === "sit") {
+              builder.variable("logo-mode", "single").variable("sit-logo", `${assetsDir}/sit-logo.png`);
+            } else if (args.logo === "uofg") {
+              builder.variable("logo-mode", "single").variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
+            } else if (args.logo === "both") {
+              builder.variable("logo-mode", "both")
+                .variable("sit-logo", `${assetsDir}/sit-logo.png`)
+                .variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
+            }
+          }
+          if (args.course) builder.variable("course", args.course);
+          if (args.project_title) builder.variable("project-title", args.project_title);
+          if (args.group) builder.variable("group", args.group);
+          if (args.version) builder.variable("version", args.version);
+          if (args.project_topic_id) builder.variable("project-topic-id", args.project_topic_id);
+          
+          // Handle authors table
+          let metaFileToCleanup: string | null = null;
+          if (args.authors) {
+            try {
+              const authorsArray = JSON.parse(args.authors) as Array<{ name: string; sit_id: string; glasgow_id: string }>;
+              const yamlLines = ["authors:"];
+              for (const author of authorsArray) {
+                yamlLines.push(`  - name: "${author.name}"`);
+                yamlLines.push(`    sit-id: "${author.sit_id}"`);
+                yamlLines.push(`    glasgow-id: "${author.glasgow_id}"`);
+              }
+              metaFileToCleanup = join(draftDir, `authors-${Date.now()}.yaml`);
+              writeFileSync(metaFileToCleanup, yamlLines.join("\n"));
+              builder.metadataFile(metaFileToCleanup);
+            } catch (e) {
+              throw new Error(`Invalid authors JSON: ${e}`);
+            }
+          }
+          
+          // Execute
+          const result = await builder.execute();
+          
+          // Cleanup
+          if (metaFileToCleanup && existsSync(metaFileToCleanup)) {
+            try { Bun.spawn(["rm", "-f", metaFileToCleanup]).exited; } catch {}
+          }
+          
+          if (!result.success) {
+            throw new Error(`Compilation failed:\n${result.error}`);
+          }
+          
+          return `Compiled: ${outputPath}\nDocument: ${draftInfo.title}\nPreset: ${draftInfo.preset}`;
+        },
+      }),
+
+      docs_delete_draft: tool({
+        description: "Delete a draft and its associated files.",
+        args: {
+          doc_id: tool.schema.string().describe("Document ID to delete"),
+        },
+        async execute(args) {
+          const registry = readRegistry(ctx);
+          
+          if (!registry.drafts[args.doc_id]) {
+            return `Draft not found: ${args.doc_id}`;
+          }
+          
+          const draftDir = join(getDocsBasePath(ctx), args.doc_id);
+          
+          // Remove directory
+          if (existsSync(draftDir)) {
+            await Bun.spawn(["rm", "-rf", draftDir]).exited;
+          }
+          
+          // Remove from registry
+          delete registry.drafts[args.doc_id];
+          writeRegistry(ctx, registry);
+          
+          return `Deleted draft: ${args.doc_id}`;
+        },
+      }),
+
+      // Legacy tools (kept for compatibility)
       docs_convert: tool({
         description: "Convert documents between formats using pandoc.",
         args: {
