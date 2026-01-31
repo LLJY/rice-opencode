@@ -15,7 +15,7 @@ The **draft-based workflow** allows iterative editing and refinement:
 - Make changes, refinements, corrections
 - Repeat as needed - no regeneration cost for edits
 
-### 3. Compile
+### 3. Once the final edit is ready or upon user request, Compile to PDF
 - **docs_compile**: Generate PDF from draft
   - Uses preset from draft creation
   - Override metadata at compile time (author, title, etc.)
@@ -23,7 +23,12 @@ The **draft-based workflow** allows iterative editing and refinement:
 
 ### 4. Manage
 - **docs_list_drafts**: See all active drafts
-- **docs_delete_draft**: Clean up when done
+- **docs_delete_draft**: ONLY WHEN REQUESTED, otherwise persist drafts for user iteration.
+
+### 5. Output
+- Since you are a subagent, you will need to output your task to the main agent:
+- Output your final response as drafts created with description and id in markdown table format
+- Add any other applicable information, comments, report any issues with the harness as required.
 
 ## Legacy Tools (One-shot generation)
 
@@ -120,3 +125,4 @@ Content here...
 - For school reports: ask about logo preference (sit, uofg, both)
 - Remind about citation requirements for academic papers
 - Use standard `edit` tool - no special document editing needed
+- You are encouraged to generate visualizations where applicable using either ASCII diagrams, or chart generation tools (if available to you).
