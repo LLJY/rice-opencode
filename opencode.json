@@ -1,0 +1,147 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "opencode-antigravity-auth@1.3.0",
+    "opencode-anthropic-auth",
+    "@mohak34/opencode-notifier@latest"
+  ],
+  "mcp": {
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer {env:GITHUB_PAT}"
+      },
+      "enabled": true
+    },
+    "deepwiki": {
+      "type": "remote",
+      "url": "https://mcp.deepwiki.com/mcp",
+      "enabled": true
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
+      },
+      "enabled": true
+    },
+    "brave-search": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
+      "environment": {
+        "BRAVE_API_KEY": "{env:BRAVE_API_KEY}"
+      },
+      "enabled": true
+    },
+    "ddg-search": {
+      "type": "local",
+      "command": ["npx", "-y", "@oevortex/ddg_search@latest"],
+      "enabled": true
+    }
+  },
+  "agent": {
+    "explore": {
+      "description": "Fast file system navigator. Locates files, logs, configs, or code relevant to tasks.",
+      "mode": "subagent",
+      "model": "google/gemini-3-flash",
+      "prompt": "{file:agents/explore.md}",
+      "temperature": 0.3,
+      "tools": {
+        "bash": true,
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "webfetch": true,
+        "write": false,
+        "edit": false
+      }
+    },
+    "docs-first-coder": {
+      "description": "Documentation-first coding expert. Verifies APIs against current docs before implementation.",
+      "mode": "subagent",
+      "model": "anthropic/claude-opus-4-5",
+      "prompt": "{file:agents/docs-first-coder.md}",
+      "temperature": 0.3,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "glob": true,
+        "grep": true,
+        "bash": true,
+        "webfetch": true,
+        "websearch": true
+      }
+    },
+    "code-checker": {
+      "description": "Code verification specialist. Three-pillar analysis: smells, spec alignment, correctness.",
+      "mode": "subagent",
+      "model": "google/gemini-3-flash",
+      "prompt": "{file:agents/code-checker.md}",
+      "temperature": 0.3,
+      "tools": {
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "bash": true,
+        "webfetch": true,
+        "websearch": true,
+        "write": false,
+        "edit": false
+      }
+    },
+    "esp32-tdd-coder": {
+      "description": "ESP32 embedded systems coder following TDD principles. Refuses code without tests unless overridden.",
+      "mode": "subagent",
+      "model": "anthropic/claude-opus-4-5",
+      "prompt": "{file:agents/esp32-tdd-coder.md}",
+      "temperature": 0.2,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "glob": true,
+        "grep": true,
+        "bash": true,
+        "webfetch": true,
+        "websearch": true
+      }
+    },
+    "esp32-tdd-test-writer": {
+      "description": "ESP32 TDD test writer. Generates unit tests from technical design docs. Rejects sparse docs.",
+      "mode": "subagent",
+      "model": "z-ai/glm-4.7",
+      "prompt": "{file:agents/esp32-tdd-test-writer.md}",
+      "temperature": 0.2,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "glob": true,
+        "grep": true,
+        "bash": true,
+        "webfetch": true,
+        "websearch": true
+      }
+    },
+    "document-writer": {
+      "description": "Creates professional documents, academic papers, and reports using pandoc.",
+      "mode": "subagent",
+      "model": "moonshot/kimi-k2-thinking",
+      "prompt": "{file:agents/document-writer.md}",
+      "temperature": 0.4,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "glob": true,
+        "grep": true,
+        "bash": true,
+        "webfetch": false,
+        "websearch": false
+      }
+    }
+  }
+}
