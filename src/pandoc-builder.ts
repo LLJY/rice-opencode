@@ -132,6 +132,14 @@ export class PandocBuilder {
   }
 
   /**
+   * Add metadata file (YAML)
+   */
+  metadataFile(path: string): this {
+    this.args.push(`--metadata-file=${path}`);
+    return this;
+  }
+
+  /**
    * Add a raw argument
    */
   arg(arg: string): this {
