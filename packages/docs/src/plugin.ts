@@ -636,6 +636,49 @@ export const DocsPlugin: Plugin = async (ctx) => {
         },
       }),
 
+      docs_generate_latex: tool({
+        description: "Generate LaTeX source from markdown using a preset. Outputs .tex file instead of PDF for manual editing or custom compilation.",
+        args: {
+          input_path: tool.schema.string().describe("Path to Markdown file"),
+          preset: tool.schema.string().describe("Preset name (use docs_presets_list to see options)"),
+          output_path: tool.schema.string().optional().describe("Output path for .tex file (defaults to same name as input)"),
+          logo: tool.schema.string().optional().describe("Logo option for school-report preset (sit, uofg, both)"),
+          title: tool.schema.string().optional(),
+          author: tool.schema.string().optional(),
+          date: tool.schema.string().optional(),
+          subtitle: tool.schema.string().optional(),
+          abstract: tool.schema.string().optional(),
+          keywords: tool.schema.string().optional(),
+          bibliography: tool.schema.string().optional().describe("Path to .bib file"),
+        },
+        async execute(args) {
+          const preset = await presetManager.loadPreset(args.preset, args.logo);
+          if (preset.template?.path && !preset.resolved_template_path) {
+            throw new Error(`Template '${preset.template.path}' not found. Use docs_templates_install.`);
+          }
+          
+          // Determine output path
+          const outputPath = args.output_path || computeOutputPath(args.input_path, undefined, "tex").replace(/\.pdf$/, '.tex');
+          
+          // Build pandoc command for LaTeX output (not PDF)
+          const builder = pandoc().input(args.input_path).output(outputPath).applyPreset(preset)
+            .applyMetadata({ title: args.title, author: args.author, date: args.date, subtitle: args.subtitle, abstract: args.abstract, keywords: args.keywords });
+          
+          if (args.bibliography) builder.bibliography(args.bibliography);
+          
+          // For IEEE templates, use simple tables
+          const isIeee = preset.name?.includes('ieee') || args.preset?.includes('ieee');
+          if (isIeee) {
+            builder.simpleTables();
+          }
+          
+          const result = await builder.execute();
+          if (!result.success) throw new Error(`Failed:\n${result.error}`);
+          
+          return `Generated LaTeX: ${outputPath}\nPreset: ${preset.name}\n\nTo compile manually:\npdflatex ${outputPath.split('/').pop()}`;
+        },
+      }),
+
       docs_create_school_report: tool({
         description: "Create SIT/UofG school report with logo options and adjustable margins.",
         args: {
