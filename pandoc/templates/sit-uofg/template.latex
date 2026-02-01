@@ -270,19 +270,57 @@ $endif$
 
 \vspace{1cm}
 
-% Authors table (Student name | SIT Student ID | Glasgow Student ID)
+% Authors table (adapts based on provided IDs)
 $if(authors)$
 \begin{center}
 \renewcommand{\arraystretch}{1.4}
+
+% Check which ID fields are present across all authors
+\newif\ifhassitid
+\newif\ifhasglasgowid
+$for(authors)$
+$if(authors.sit-id)$\hassitidtrue$endif$
+$if(authors.glasgow-id)$\hasglasgowidtrue$endif$
+$endfor$
+
+% Determine table format based on which IDs are present
+\ifhasglasgowid
+% Glasgow ID present: 3 columns
 \begin{tabular}{|l|l|l|}
 \hline
 \textbf{Student name} & \textbf{SIT Student ID} & \textbf{Glasgow Student ID} \\
 \hline
 $for(authors)$
-$authors.name$ & $authors.sit-id$ & $authors.glasgow-id$ \\
+$authors.name$ & $if(authors.sit-id)$$authors.sit-id$$else$-$endif$ & $authors.glasgow-id$ \\
 \hline
 $endfor$
 \end{tabular}
+\else
+\ifhassitid
+% Only SIT ID: 2 columns
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Student name} & \textbf{SIT Student ID} \\
+\hline
+$for(authors)$
+$authors.name$ & $authors.sit-id$ \\
+\hline
+$endfor$
+\end{tabular}
+\else
+% No IDs: 1 column
+\begin{tabular}{|l|}
+\hline
+\textbf{Student name} \\
+\hline
+$for(authors)$
+$authors.name$ \\
+\hline
+$endfor$
+\end{tabular}
+\fi
+\fi
+
 \end{center}
 $else$
 $if(author)$
