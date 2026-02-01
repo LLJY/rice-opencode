@@ -330,8 +330,12 @@ export const DocsPlugin: Plugin = async (ctx) => {
               const yamlLines = ["authors:"];
               for (const author of authorsArray) {
                 yamlLines.push(`  - name: "${escapeYaml(author.name)}"`);
-                yamlLines.push(`    sit-id: "${escapeYaml(author.sit_id)}"`);
-                yamlLines.push(`    glasgow-id: "${escapeYaml(author.glasgow_id)}"`);
+                if (author.sit_id) {
+                  yamlLines.push(`    sit-id: "${escapeYaml(author.sit_id)}"`);
+                }
+                if (author.glasgow_id) {
+                  yamlLines.push(`    glasgow-id: "${escapeYaml(author.glasgow_id)}"`);
+                }
               }
               metaFileToCleanup = join(draftDir, `authors-${Date.now()}.yaml`);
               writeFileSync(metaFileToCleanup, yamlLines.join("\n"));
@@ -706,8 +710,12 @@ export const DocsPlugin: Plugin = async (ctx) => {
               const yamlLines = ["authors:"];
               for (const author of authorsArray) {
                 yamlLines.push(`  - name: "${author.name}"`);
-                yamlLines.push(`    sit-id: "${author.sit_id}"`);
-                yamlLines.push(`    glasgow-id: "${author.glasgow_id}"`);
+                if (author.sit_id) {
+                  yamlLines.push(`    sit-id: "${author.sit_id}"`);
+                }
+                if (author.glasgow_id) {
+                  yamlLines.push(`    glasgow-id: "${author.glasgow_id}"`);
+                }
               }
               metaFileToCleanup = `/tmp/pandoc-authors-${Date.now()}.yaml`;
               const yamlContent = yamlLines.join("\n");
