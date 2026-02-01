@@ -39,12 +39,18 @@ function generateDocId(): string {
 
 // Get the docs directory path (project-local .opencode/docs)
 function getDocsBasePath(ctx: { worktree?: string; directory: string }): string {
-  const base = ctx.worktree || ctx.directory;
+  const base = ctx.worktree || ctx.directory || process.cwd();
+  if (!base || base === "/") {
+    throw new Error("Cannot determine project directory. Please run from a project directory.");
+  }
   return join(base, ".opencode", "docs");
 }
 
 function getRegistryPath(ctx: { worktree?: string; directory: string }): string {
-  const base = ctx.worktree || ctx.directory;
+  const base = ctx.worktree || ctx.directory || process.cwd();
+  if (!base || base === "/") {
+    throw new Error("Cannot determine project directory. Please run from a project directory.");
+  }
   return join(base, ".opencode", "docs-registry.json");
 }
 
