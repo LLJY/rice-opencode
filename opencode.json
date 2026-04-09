@@ -9,8 +9,8 @@
     "plan": {
       "description": "Strategic planning agent. Analyzes requirements and creates implementation plans.",
       "mode": "primary",
-      "model": "anthropic/claude-opus-4-5",
-      "variant": "max",
+      "model": "openai/gpt-5.4",
+      "variant": "high",
       "temperature": 1.0,
       "tools": {
         "read": true,
@@ -24,24 +24,24 @@
     "chat": {
       "description": "General interactive agent. User-facing chat, planning, and safe execution.",
       "mode": "primary",
-      "model": "anthropic/claude-opus-4-5",
-      "variant": "max",
+      "model": "openai/gpt-5.4",
+      "variant": "high",
       "prompt": "{file:prompts/chat-prompt.md}",
       "temperature": 1.0
     },
     "build": {
       "description": "High-agency builder agent. Explores, delegates, implements, and verifies code changes.",
       "mode": "primary",
-      "model": "anthropic/claude-opus-4-5",
-      "variant": "max",
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh",
       "prompt": "{file:prompts/builder-prompt.md}",
       "temperature": 1.0
     },
     "explore": {
       "description": "Fast file system navigator. Locates files, logs, configs, or code relevant to tasks.",
       "mode": "subagent",
-      "model": "kimi-for-coding/k2p5",
-      "variant": "max",
+      "model": "openai/gpt-5.4-mini",
+      "variant": "high",
       "prompt": "{file:agents/explore.md}",
       "temperature": 1.0,
       "tools": {
@@ -57,8 +57,8 @@
     "docs-first-coder": {
       "description": "Documentation-first coding expert. Verifies APIs against current docs before implementation.",
       "mode": "subagent",
-      "model": "kimi-for-coding/k2p5",
-      "variant": "max",
+      "model": "openai/gpt-5.4",
+      "variant": "medium",
       "prompt": "{file:agents/docs-first-coder.md}",
       "temperature": 1.0,
       "tools": {
@@ -75,8 +75,8 @@
     "code-checker": {
       "description": "Code verification specialist. Three-pillar analysis: smells, spec alignment, correctness.",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-5",
-      "variant": "max",
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh",
       "prompt": "{file:agents/code-checker.md}",
       "temperature": 1.0,
       "tools": {
@@ -93,8 +93,8 @@
     "esp32-tdd-coder": {
       "description": "ESP32 embedded systems coder following TDD principles. Refuses code without tests unless overridden.",
       "mode": "subagent",
-      "model": "kimi-for-coding/k2p5",
-      "variant": "max",
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh",
       "prompt": "{file:agents/esp32-tdd-coder.md}",
       "temperature": 1.0,
       "tools": {
@@ -111,8 +111,8 @@
     "esp32-tdd-test-writer": {
       "description": "ESP32 TDD test writer. Generates unit tests from technical design docs. Rejects sparse docs.",
       "mode": "subagent",
-      "model": "kimi-for-coding/k2p5",
-      "variant": "max",
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh",
       "prompt": "{file:agents/esp32-tdd-test-writer.md}",
       "temperature": 1.0,
       "tools": {
@@ -129,8 +129,8 @@
     "document-writer": {
       "description": "Creates professional documents, academic papers, and reports using pandoc.",
       "mode": "subagent",
-      "model": "kimi-for-coding/k2p5",
-      "variant": "max",
+      "model": "openai/gpt-5.4",
+      "variant": "high",
       "prompt": "{file:agents/document-writer.md}",
       "temperature": 1.0,
       "tools": {
