@@ -177,6 +177,11 @@
       },
       "enabled": true
     },
+    "researcher-mcp": {
+      "type": "local",
+      "command": ["sh", ".opencode/researcher-mcp.sh"],
+      "enabled": true
+    },
     "brave-search": {
       "type": "local",
       "command": ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
