@@ -21,8 +21,16 @@
         "webfetch": true
       }
     },
+    "chat": {
+      "description": "General interactive agent. User-facing chat, planning, and safe execution.",
+      "mode": "primary",
+      "model": "anthropic/claude-opus-4-5",
+      "variant": "max",
+      "prompt": "{file:prompts/chat-prompt.md}",
+      "temperature": 1.0
+    },
     "build": {
-      "description": "Primary builder agent. Executes implementation with best practices.",
+      "description": "High-agency builder agent. Explores, delegates, implements, and verifies code changes.",
       "mode": "primary",
       "model": "anthropic/claude-opus-4-5",
       "variant": "max",
