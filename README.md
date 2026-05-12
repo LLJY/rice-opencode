@@ -12,12 +12,13 @@ This repository contains a fully-featured OpenCode-AI configuration designed for
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
+| `plan` | GPT-5.4 | Requirements analysis and execution planning |
+| `chat` | GPT-5.4 | General interactive agent |
+| `build` | GPT-5.4 | High-agency implementation and verification |
 | `explore` | Gemini 3 Flash | Fast codebase navigation and file discovery |
 | `docs-first-coder` | Claude Opus 4.5 | Documentation-verified coding with live API research |
 | `code-checker` | Gemini 3 Flash | Code review, smells detection, and verification |
-| `esp32-tdd-coder` | Claude Opus 4.5 | ESP32 embedded development with strict TDD |
-| `esp32-tdd-test-writer` | GLM-4.7 | ESP32 unit test generation from specifications |
-| `document-writer` | Kimi K2 Thinking | Academic papers, reports, and PDF generation |
+| `document-proofreader` | GPT-5.4 | Academic proofreading and argument review |
 
 ### MCP Server Integrations
 
@@ -35,26 +36,27 @@ Custom TypeScript plugin for creating professional documents:
 - **School Reports** — SIT/UofG branded reports with logos
 - **Styled PDFs** — Professional documents with Eisvogel template
 - **Format Conversion** — Pandoc-powered format conversion
+- **Sidecar Bibliographies** — `refs.bib` workflow for scholarly citations
+- **Citation Styles** — args-based `citation_style` handling (`ieee`, `apa`, `acm`, `none`)
 
 ## Repository Structure
 
 ```
 ├── agents/                 # Agent prompt definitions
-│   ├── builder-prompt.md   # Core builder methodology
+│   ├── build.md            # Core builder methodology
+│   ├── chat.md             # General interactive agent
 │   ├── code-checker.md     # Code verification agent
+│   ├── document-proofreader.md
 │   ├── docs-first-coder.md # Documentation-first coding
-│   ├── document-writer.md  # Document generation agent
-│   ├── esp32-tdd-coder.md  # ESP32 TDD practitioner
-│   ├── esp32-tdd-test-writer.md
-│   └── explore.md          # File system navigator
+│   ├── explore.md          # File system navigator
+│   └── plan.md             # Planning agent
 ├── plugins/                # OpenCode plugin source (TypeScript)
 │   └── docs.ts            # Document generation plugin
 ├── src/                    # Supporting modules
 ├── pandoc/                 # LaTeX templates and assets
 │   ├── assets/            # Logo images (SIT, UofG)
 │   └── templates/         # LaTeX templates
-├── opencode.json          # Main OpenCode configuration
-└── builder-prompt.txt     # Condensed builder prompt
+└── opencode.json          # Main OpenCode configuration
 ```
 
 ## Installation
@@ -101,7 +103,7 @@ Agents are invoked automatically by OpenCode based on task context, or you can r
 @explore find all configuration files in this project
 @docs-first-coder implement a React hook following current React docs
 @code-checker review the auth module
-@document-writer create an IEEE paper from paper.md
+@document-proofreader review report.md
 ```
 
 ### Document Generation
@@ -115,6 +117,19 @@ Available tools when working with documents:
 - `docs_templates_list` — List installed templates
 - `docs_templates_install` — Install templates and CSL styles
 - `docs_presets_list` / `docs_presets_show` — Manage document presets
+
+Recommended scholarly workflow:
+
+- Keep document content in markdown
+- Keep references in a sidecar `refs.bib`
+- Use Pandoc citation syntax like `[@key]`
+- Select citation rendering with `citation_style`
+  - `ieee` uses the IEEE-specific LaTeX/BibTeX path for IEEE presets
+  - `apa` / `acm` use CSL + citeproc
+
+Project skill available:
+
+- `docs-workflow` — on-demand OpenCode skill for choosing the right docs tool flow, presets, `refs.bib`, and `citation_style`
 
 **Presets:**
 - `school-report` — SIT/UofG reports (`--logo sit|uofg|both`)

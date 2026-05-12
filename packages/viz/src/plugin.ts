@@ -4,7 +4,7 @@ import { type Plugin, tool } from "@opencode-ai/plugin";
  * Visualization Generator Plugin
  * 
  * Creates charts, diagrams, and figures for documents and presentations.
- * Designed to be called by document-writer agent for figure generation.
+ * Designed for document and presentation figure generation workflows.
  */
 
 export const VizPlugin: Plugin = async (ctx) => {

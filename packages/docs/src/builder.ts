@@ -1,5 +1,7 @@
 import { ResolvedPreset } from "./presets";
 
+export type CitationProcessor = "citeproc" | "natbib" | "biblatex";
+
 /**
  * Fluent builder for pandoc commands
  */
@@ -77,9 +79,21 @@ export class PandocBuilder {
   /**
    * Add bibliography file
    */
-  bibliography(path: string): this {
+  bibliography(path: string, options: { processor?: CitationProcessor } = {}): this {
     this.args.push(`--bibliography=${path}`);
-    this.args.push("--citeproc");
+
+    switch (options.processor ?? "citeproc") {
+      case "citeproc":
+        this.args.push("--citeproc");
+        break;
+      case "natbib":
+        this.args.push("--natbib");
+        break;
+      case "biblatex":
+        this.args.push("--biblatex");
+        break;
+    }
+
     return this;
   }
 
@@ -176,9 +190,16 @@ export class PandocBuilder {
   /**
    * Apply a preset configuration
    */
-  applyPreset(preset: ResolvedPreset): this {
+  applyPreset(
+    preset: ResolvedPreset,
+    options: { includeCsl?: boolean; inputFormatOverride?: string } = {}
+  ): this {
+    const includeCsl = options.includeCsl ?? true;
+
     // Apply input format
-    if (preset.pandoc?.from) {
+    if (options.inputFormatOverride) {
+      this.from(options.inputFormatOverride);
+    } else if (preset.pandoc?.from) {
       this.from(preset.pandoc.from);
     }
 
@@ -198,7 +219,7 @@ export class PandocBuilder {
     }
 
     // Apply CSL
-    if (preset.resolved_csl_path) {
+    if (includeCsl && preset.resolved_csl_path) {
       this.csl(preset.resolved_csl_path);
     }
 

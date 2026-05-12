@@ -21,6 +21,8 @@ export interface PresetConfig {
   citation?: {
     style?: string;
     csl_file?: string;
+    backend?: "none" | "citeproc" | "natbib" | "biblatex";
+    biblio_style?: string;
   };
 
   pandoc?: {
@@ -105,7 +107,8 @@ const BUILTIN_PRESETS: Record<string, PresetConfig> = {
     pdf_engine: "pdflatex",
     citation: {
       style: "ieee",
-      csl_file: "ieee.csl",
+      backend: "natbib",
+      biblio_style: "IEEEtranN",
     },
     pandoc: {
       from: "markdown+citations+smart",
@@ -140,6 +143,7 @@ const BUILTIN_PRESETS: Record<string, PresetConfig> = {
     citation: {
       style: "acm",
       csl_file: "acm-sig-proceedings.csl",
+      backend: "citeproc",
     },
     pandoc: {
       from: "markdown+citations+smart",
@@ -158,6 +162,7 @@ const BUILTIN_PRESETS: Record<string, PresetConfig> = {
     citation: {
       style: "springer-lncs",
       csl_file: "springer-lncs.csl",
+      backend: "citeproc",
     },
     pandoc: {
       from: "markdown+citations+smart",

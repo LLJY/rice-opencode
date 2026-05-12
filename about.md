@@ -27,12 +27,13 @@ This repository contains my OpenCode-AI configuration, including:
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
+| plan | GPT-5.4 | Requirements analysis and execution planning |
+| chat | GPT-5.4 | General interactive agent |
+| build | GPT-5.4 | High-agency implementation and verification |
 | explore | Gemini 3 Flash | Fast codebase navigation and file discovery |
 | docs-first-coder | Claude Opus 4.5 | Documentation-verified coding |
 | code-checker | Gemini 3 Flash | Code review and verification |
-| esp32-tdd-coder | Claude Opus 4.5 | ESP32 embedded development (TDD) |
-| esp32-tdd-test-writer | GLM-4.7 | ESP32 test generation from specs |
-| document-writer | Kimi K2 Thinking | Academic papers and reports |
+| document-proofreader | GPT-5.4 | Academic proofreading and argument review |
 
 ## Document Plugin
 

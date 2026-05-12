@@ -1,9 +1,9 @@
 import { type Plugin, tool } from "@opencode-ai/plugin";
 import { TemplateResolver } from "./templates";
-import { PresetManager } from "./presets";
+import { PresetManager, type ResolvedPreset } from "./presets";
 import { pandoc, computeOutputPath } from "./builder";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
-import { join, dirname } from "path";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { basename, dirname, extname, isAbsolute, join, parse, resolve } from "path";
 
 // YAML string escaping helper
 function escapeYaml(str: string): string {
@@ -117,9 +117,320 @@ function isValidDocId(docId: string): boolean {
   return /^[a-z]+-[a-z]+-\d+(-\d+)?$/.test(docId);
 }
 
+const CITATION_STYLE_VALUES = ["default", "none", "ieee", "apa", "acm"] as const;
+type CitationStyle = typeof CITATION_STYLE_VALUES[number];
+type CitationBackend = "none" | "citeproc" | "natbib" | "biblatex";
+
+interface CitationConfig {
+  style: string;
+  backend: CitationBackend;
+  cslPath?: string;
+  biblioStyle?: string;
+}
+
+function normalizeCitationStyle(style?: string): CitationStyle {
+  const normalized = (style || "default").toLowerCase() as CitationStyle;
+  if ((CITATION_STYLE_VALUES as readonly string[]).includes(normalized)) {
+    return normalized;
+  }
+
+  throw new Error(
+    `Unsupported citation style '${style}'. Supported values: ${CITATION_STYLE_VALUES.join(", ")}`
+  );
+}
+
+function resolveDefaultBibliographyPath(baseDir: string): string | undefined {
+  const bibliographyPath = join(baseDir, "refs.bib");
+  if (!existsSync(bibliographyPath)) {
+    return undefined;
+  }
+
+  const content = readFileSync(bibliographyPath, "utf-8").trim();
+  return content ? bibliographyPath : undefined;
+}
+
+function toAbsolutePath(path: string, baseDir: string): string {
+  return isAbsolute(path) ? path : resolve(baseDir, path);
+}
+
+function resolveBibliographyPath(
+  explicitPath: string | undefined,
+  baseDir: string,
+  resolveFromDir = baseDir
+): string | undefined {
+  if (explicitPath) {
+    const resolvedPath = toAbsolutePath(explicitPath, resolveFromDir);
+    if (!existsSync(resolvedPath)) {
+      throw new Error(`Bibliography file not found: ${resolvedPath}`);
+    }
+    return resolvedPath;
+  }
+
+  return resolveDefaultBibliographyPath(baseDir);
+}
+
+function documentHasPandocCitations(path: string): boolean {
+  const content = readFileSync(path, "utf-8");
+  return /\[[^\]\n]*-?@[A-Za-z0-9][\w:.#$%&+?<>~\/-]*[^\]\n]*\]|(?:^|[\s(])(?:-?@[A-Za-z0-9][\w:.#$%&+?<>~\/-]*)/m.test(content);
+}
+
+function withoutCitationsInputFormat(format = "markdown"): string {
+  return `${format.replace(/[+-]citations/g, "")}-citations`;
+}
+
+function resolveRequiredCslPath(
+  resolver: TemplateResolver,
+  cslFile: string,
+  installHint: "csl-ieee" | "csl-apa" | "csl-acm"
+): string {
+  const resolved = resolver.resolveCsl(cslFile);
+  if (!resolved) {
+    throw new Error(`CSL style '${cslFile}' not found. Run: docs_templates_install ${installHint}`);
+  }
+
+  return resolved.path;
+}
+
+function resolveCitationConfig(
+  resolver: TemplateResolver,
+  citationStyle: string | undefined,
+  bibliographyPath: string | undefined,
+  preset?: ResolvedPreset
+): CitationConfig {
+  const style = normalizeCitationStyle(citationStyle);
+  const hasBibliography = Boolean(bibliographyPath);
+
+  if (style === "none") {
+    return { style, backend: "none" };
+  }
+
+  if (style === "default") {
+    if (!hasBibliography) {
+      return { style, backend: "none" };
+    }
+
+    if (preset?.citation?.backend === "natbib") {
+      return {
+        style: preset.citation.style || "ieee",
+        backend: "natbib",
+        biblioStyle: preset.citation.biblio_style || "IEEEtranN",
+      };
+    }
+
+    if (preset?.citation?.backend === "biblatex") {
+      return {
+        style: preset.citation.style || "default",
+        backend: "biblatex",
+        biblioStyle: preset.citation.biblio_style,
+      };
+    }
+
+    if (preset?.resolved_csl_path) {
+      return {
+        style: preset.citation?.style || "default",
+        backend: "citeproc",
+        cslPath: preset.resolved_csl_path,
+      };
+    }
+
+    if (preset?.citation?.csl_file) {
+      throw new Error(
+        `Preset '${preset.name}' requires CSL style '${preset.citation?.csl_file || "(unspecified)"}', but it is not installed or could not be resolved.`
+      );
+    }
+
+    return { style, backend: "citeproc" };
+  }
+
+  if (!hasBibliography) {
+    throw new Error(
+      `citation_style='${style}' requires a bibliography. Pass bibliography=... or create refs.bib.`
+    );
+  }
+
+  switch (style) {
+    case "ieee":
+      if (preset?.citation?.backend === "natbib") {
+        return {
+          style,
+          backend: "natbib",
+          biblioStyle: preset.citation.biblio_style || "IEEEtranN",
+        };
+      }
+      return {
+        style,
+        backend: "citeproc",
+        cslPath: resolveRequiredCslPath(resolver, "ieee.csl", "csl-ieee"),
+      };
+    case "apa":
+      return {
+        style,
+        backend: "citeproc",
+        cslPath: resolveRequiredCslPath(resolver, "apa.csl", "csl-apa"),
+      };
+    case "acm":
+      return {
+        style,
+        backend: "citeproc",
+        cslPath: resolveRequiredCslPath(resolver, "acm-sig-proceedings.csl", "csl-acm"),
+      };
+    default:
+      return { style: "none", backend: "none" };
+  }
+}
+
+function assertCitationRequirements(
+  inputPath: string,
+  bibliographyPath: string | undefined,
+  citationConfig: CitationConfig
+): void {
+  if (citationConfig.style === "none") {
+    return;
+  }
+
+  if (citationConfig.backend !== "none" && bibliographyPath) {
+    return;
+  }
+
+  if (documentHasPandocCitations(inputPath)) {
+    throw new Error(
+      `Citations found in ${inputPath} but no bibliography is available. Pass bibliography=... or add refs.bib.`
+    );
+  }
+}
+
+function applyCitationConfig(
+  builder: ReturnType<typeof pandoc>,
+  bibliographyPath: string | undefined,
+  citationConfig: CitationConfig
+): void {
+  if (!bibliographyPath || citationConfig.backend === "none") {
+    return;
+  }
+
+  const processor = citationConfig.backend as Exclude<CitationBackend, "none">;
+  builder.bibliography(bibliographyPath, { processor });
+
+  if (citationConfig.cslPath) {
+    builder.csl(citationConfig.cslPath);
+  }
+
+  if (citationConfig.biblioStyle) {
+    builder.variable("biblio-style", citationConfig.biblioStyle);
+  }
+}
+
+function usesIeeeFormatting(preset: ResolvedPreset): boolean {
+  return preset.name.startsWith("ieee")
+    || preset.template?.document_class === "IEEEtran"
+    || preset.template?.path.includes("ieee") === true;
+}
+
+function buildKpathseaPath(paths: Array<string | undefined>, existing?: string): string {
+  return `${[...paths.filter((value): value is string => Boolean(value)), existing]
+    .filter(Boolean)
+    .join(":")}:`;
+}
+
+function ensureBuildDir(baseDir: string, docName: string): string {
+  const buildDir = join(baseDir, ".opencode-build", docName);
+  mkdirSync(buildDir, { recursive: true });
+  return buildDir;
+}
+
+function stageLatexSupportFiles(templatePath: string | undefined, buildDir: string): void {
+  if (!templatePath) {
+    return;
+  }
+
+  const templateDir = dirname(templatePath);
+  const entries = readdirSync(templateDir);
+  for (const entry of entries) {
+    const sourcePath = join(templateDir, entry);
+    if (!statSync(sourcePath).isFile()) {
+      continue;
+    }
+
+    if (![".cls", ".bst", ".sty"].includes(extname(entry))) {
+      continue;
+    }
+
+    copyFileSync(sourcePath, join(buildDir, entry));
+  }
+}
+
+async function runProcess(
+  command: string[],
+  cwd: string,
+  env?: Record<string, string>
+): Promise<{ success: boolean; output: string; error: string }> {
+  const proc = Bun.spawn(command, {
+    stdout: "pipe",
+    stderr: "pipe",
+    cwd,
+    env: env ? { ...process.env, ...env } : undefined,
+  });
+
+  await proc.exited;
+
+  const stdout = await new Response(proc.stdout).text();
+  const stderr = await new Response(proc.stderr).text();
+
+  return {
+    success: proc.exitCode === 0,
+    output: stdout,
+    error: stderr || stdout,
+  };
+}
+
+async function compilePdfWithBibtex(
+  texPath: string,
+  outputPath: string,
+  templatePath?: string,
+  resourceDir?: string
+): Promise<void> {
+  const buildDir = dirname(texPath);
+  const texBaseName = parse(texPath).name;
+  stageLatexSupportFiles(templatePath, buildDir);
+
+  const templateDir = templatePath ? dirname(templatePath) : undefined;
+  const resolvedResourceDir = resourceDir || dirname(outputPath);
+  const envPaths = [buildDir, resolvedResourceDir, templateDir].filter((value): value is string => Boolean(value));
+  const env = {
+    TEXINPUTS: buildKpathseaPath(envPaths, process.env.TEXINPUTS),
+    BIBINPUTS: buildKpathseaPath([resolvedResourceDir, buildDir], process.env.BIBINPUTS),
+    BSTINPUTS: buildKpathseaPath([buildDir, templateDir], process.env.BSTINPUTS),
+  };
+
+  const latexCommands = [
+    ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", basename(texPath)],
+    ["bibtex", texBaseName],
+    ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", basename(texPath)],
+    ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", basename(texPath)],
+  ];
+
+  for (const command of latexCommands) {
+    const result = await runProcess(command, buildDir, env);
+    if (!result.success) {
+      throw new Error(`Compilation failed:\n${result.error}`);
+    }
+  }
+
+  const builtPdfPath = join(buildDir, `${texBaseName}.pdf`);
+  if (!existsSync(builtPdfPath)) {
+    throw new Error(`Expected PDF not found after BibTeX build: ${builtPdfPath}`);
+  }
+
+  if (builtPdfPath !== outputPath) {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    copyFileSync(builtPdfPath, outputPath);
+  }
+}
+
 export const DocsPlugin: Plugin = async (ctx) => {
   const resolver = new TemplateResolver({ projectRoot: ctx.worktree || ctx.directory });
   const presetManager = new PresetManager(resolver);
+  const workspaceRoot = ctx.worktree || ctx.directory;
 
   return {
     tool: {
@@ -137,13 +448,16 @@ export const DocsPlugin: Plugin = async (ctx) => {
           const docId = generateUniqueDocId(ctx);
           const draftDir = join(getDocsBasePath(ctx), docId);
           mkdirSync(draftDir, { recursive: true });
+          const sourceMarkdownPath = args.source_markdown
+            ? toAbsolutePath(args.source_markdown, workspaceRoot)
+            : undefined;
           
           // Get initial content
           let content = "";
           if (args.initial_content) {
             content = args.initial_content;
-          } else if (args.source_markdown && existsSync(args.source_markdown)) {
-            content = readFileSync(args.source_markdown, "utf-8");
+          } else if (sourceMarkdownPath && existsSync(sourceMarkdownPath)) {
+            content = readFileSync(sourceMarkdownPath, "utf-8");
           }
           
           // Add YAML frontmatter if not present
@@ -161,6 +475,19 @@ export const DocsPlugin: Plugin = async (ctx) => {
           // Write draft markdown
           const draftPath = join(draftDir, "draft.md");
           writeFileSync(draftPath, content);
+
+          // Create bibliography sidecar for markdown-first scholarly workflows
+          const bibliographyPath = join(draftDir, "refs.bib");
+          if (sourceMarkdownPath) {
+            const sourceBibliographyPath = join(dirname(sourceMarkdownPath), "refs.bib");
+            if (existsSync(sourceBibliographyPath)) {
+              copyFileSync(sourceBibliographyPath, bibliographyPath);
+            } else {
+              writeFileSync(bibliographyPath, "");
+            }
+          } else {
+            writeFileSync(bibliographyPath, "");
+          }
           
           // Write metadata
           const metaPath = join(draftDir, "meta.json");
@@ -169,7 +496,7 @@ export const DocsPlugin: Plugin = async (ctx) => {
             preset: args.preset,
             created_at: new Date().toISOString(),
             last_modified: new Date().toISOString(),
-            source_markdown: args.source_markdown,
+            source_markdown: sourceMarkdownPath,
             status: "draft",
           };
           writeFileSync(metaPath, JSON.stringify(meta, null, 2));
@@ -181,7 +508,7 @@ export const DocsPlugin: Plugin = async (ctx) => {
             preset: args.preset,
             created_at: meta.created_at,
             last_modified: meta.last_modified,
-            source_markdown: args.source_markdown,
+            source_markdown: sourceMarkdownPath,
             status: "draft",
           };
           writeRegistry(ctx, registry);
@@ -191,11 +518,13 @@ export const DocsPlugin: Plugin = async (ctx) => {
             ``,
             `Document ID: ${docId}`,
             `Draft path: ${draftPath}`,
+            `Bibliography path: ${bibliographyPath}`,
             `Preset: ${args.preset}`,
             ``,
             `Next steps:`,
             `1. Edit the draft: ${draftPath}`,
-            `2. Compile when ready: docs_compile doc_id="${docId}"`,
+            `2. Add references if needed: ${bibliographyPath}`,
+            `3. Compile when ready: docs_compile doc_id="${docId}"`,
           ].join("\n");
         },
       }),
@@ -240,6 +569,7 @@ export const DocsPlugin: Plugin = async (ctx) => {
           abstract: tool.schema.string().optional(),
           keywords: tool.schema.string().optional(),
           bibliography: tool.schema.string().optional().describe("Path to .bib file"),
+          citation_style: tool.schema.enum(CITATION_STYLE_VALUES).optional().describe("Citation style/backend selector (default, none, ieee, apa, acm)"),
           // School report specific
           logo: tool.schema.string().optional().describe("Logo option (sit, uofg, both) - for school-report preset"),
           course: tool.schema.string().optional(),
@@ -278,83 +608,106 @@ export const DocsPlugin: Plugin = async (ctx) => {
           
           // Load preset
           const preset = await presetManager.loadPreset(draftInfo.preset, args.logo);
-          
-          // Build pandoc command
-          const builder = pandoc().input(draftPath).output(outputPath);
+
+          const bibliographyPath = resolveBibliographyPath(args.bibliography, draftDir);
+          const citationConfig = resolveCitationConfig(resolver, args.citation_style, bibliographyPath, preset);
+          assertCitationRequirements(draftPath, bibliographyPath, citationConfig);
           
           // Apply preset
           if (preset.template?.path && !preset.resolved_template_path) {
             throw new Error(`Template '${preset.template.path}' not found. Use docs_templates_install.`);
           }
-          
-          builder.applyPreset(preset).listings();
-          
-          // Apply metadata overrides
-          const metadata: Record<string, string> = {};
-          if (args.author) metadata.author = args.author;
-          if (args.date) metadata.date = args.date;
-          if (args.subtitle) metadata.subtitle = args.subtitle;
-          if (args.abstract) metadata.abstract = args.abstract;
-          if (args.keywords) metadata.keywords = args.keywords;
-          if (Object.keys(metadata).length > 0) {
-            builder.applyMetadata(metadata);
-          }
-          
-          // Bibliography
-          if (args.bibliography) builder.bibliography(args.bibliography);
-          
-          // School report specific variables
-          if (args.logo) {
-            const assetsDir = resolver.getUserConfigDir() + "/assets";
-            if (args.logo === "sit") {
-              builder.variable("logo-mode", "single").variable("sit-logo", `${assetsDir}/sit-logo.png`);
-            } else if (args.logo === "uofg") {
-              builder.variable("logo-mode", "single").variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
-            } else if (args.logo === "both") {
-              builder.variable("logo-mode", "both")
-                .variable("sit-logo", `${assetsDir}/sit-logo.png`)
-                .variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
-            }
-          }
-          if (args.course) builder.variable("course", args.course);
-          if (args.project_title) builder.variable("project-title", args.project_title);
-          if (args.group) builder.variable("group", args.group);
-          if (args.version) builder.variable("version", args.version);
-          if (args.project_topic_id) builder.variable("project-topic-id", args.project_topic_id);
-          
-          // Handle authors table
           let metaFileToCleanup: string | null = null;
-          if (args.authors) {
-            try {
-              const authorsArray = JSON.parse(args.authors) as Array<{ name: string; sit_id: string; glasgow_id: string }>;
-              const yamlLines = ["authors:"];
-              for (const author of authorsArray) {
-                yamlLines.push(`  - name: "${escapeYaml(author.name)}"`);
-                if (author.sit_id) {
-                  yamlLines.push(`    sit-id: "${escapeYaml(author.sit_id)}"`);
-                }
-                if (author.glasgow_id) {
-                  yamlLines.push(`    glasgow-id: "${escapeYaml(author.glasgow_id)}"`);
+
+          try {
+            const metadata: Record<string, string> = {};
+            if (args.author) metadata.author = args.author;
+            if (args.date) metadata.date = args.date;
+            if (args.subtitle) metadata.subtitle = args.subtitle;
+            if (args.abstract) metadata.abstract = args.abstract;
+            if (args.keywords) metadata.keywords = args.keywords;
+            const inputFormatOverride = citationConfig.style === "none"
+              ? withoutCitationsInputFormat(preset.pandoc?.from)
+              : undefined;
+
+            const configureBuilder = (builder: ReturnType<typeof pandoc>) => {
+              builder.applyPreset(preset, { includeCsl: false, inputFormatOverride }).listings();
+
+              if (usesIeeeFormatting(preset)) {
+                builder.simpleTables();
+              }
+
+              if (Object.keys(metadata).length > 0) {
+                builder.applyMetadata(metadata);
+              }
+
+              applyCitationConfig(builder, bibliographyPath, citationConfig);
+
+              if (args.logo) {
+                const assetsDir = resolver.getUserConfigDir() + "/assets";
+                if (args.logo === "sit") {
+                  builder.variable("logo-mode", "single").variable("sit-logo", `${assetsDir}/sit-logo.png`);
+                } else if (args.logo === "uofg") {
+                  builder.variable("logo-mode", "single").variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
+                } else if (args.logo === "both") {
+                  builder.variable("logo-mode", "both")
+                    .variable("sit-logo", `${assetsDir}/sit-logo.png`)
+                    .variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
                 }
               }
-              metaFileToCleanup = join(draftDir, `authors-${Date.now()}.yaml`);
-              writeFileSync(metaFileToCleanup, yamlLines.join("\n"));
-              builder.metadataFile(metaFileToCleanup);
-            } catch (e) {
-              throw new Error(`Invalid authors JSON: ${e}`);
+              if (args.course) builder.variable("course", args.course);
+              if (args.project_title) builder.variable("project-title", args.project_title);
+              if (args.group) builder.variable("group", args.group);
+              if (args.version) builder.variable("version", args.version);
+              if (args.project_topic_id) builder.variable("project-topic-id", args.project_topic_id);
+
+              if (args.authors) {
+                try {
+                  const authorsArray = JSON.parse(args.authors) as Array<{ name: string; sit_id: string; glasgow_id: string }>;
+                  const yamlLines = ["authors:"];
+                  for (const author of authorsArray) {
+                    yamlLines.push(`  - name: "${escapeYaml(author.name)}"`);
+                    if (author.sit_id) {
+                      yamlLines.push(`    sit-id: "${escapeYaml(author.sit_id)}"`);
+                    }
+                    if (author.glasgow_id) {
+                      yamlLines.push(`    glasgow-id: "${escapeYaml(author.glasgow_id)}"`);
+                    }
+                  }
+                  metaFileToCleanup = join(draftDir, `authors-${Date.now()}.yaml`);
+                  writeFileSync(metaFileToCleanup, yamlLines.join("\n"));
+                  builder.metadataFile(metaFileToCleanup);
+                } catch (e) {
+                  throw new Error(`Invalid authors JSON: ${e}`);
+                }
+              }
+            };
+
+            if (citationConfig.backend === "natbib") {
+              const buildDir = ensureBuildDir(draftDir, args.doc_id);
+              const texPath = join(buildDir, `${args.doc_id}.tex`);
+              const builder = pandoc().input(draftPath).output(texPath);
+              configureBuilder(builder);
+
+              const result = await builder.execute(buildDir);
+              if (!result.success) {
+                throw new Error(`Compilation failed:\n${result.error}`);
+              }
+
+              await compilePdfWithBibtex(texPath, outputPath, preset.resolved_template_path, draftDir);
+            } else {
+              const builder = pandoc().input(draftPath).output(outputPath);
+              configureBuilder(builder);
+
+              const result = await builder.execute();
+              if (!result.success) {
+                throw new Error(`Compilation failed:\n${result.error}`);
+              }
             }
-          }
-          
-          // Execute
-          const result = await builder.execute();
-          
-          // Cleanup
-          if (metaFileToCleanup && existsSync(metaFileToCleanup)) {
-            try { await Bun.spawn(["rm", "-f", metaFileToCleanup]).exited; } catch {}
-          }
-          
-          if (!result.success) {
-            throw new Error(`Compilation failed:\n${result.error}`);
+          } finally {
+            if (metaFileToCleanup && existsSync(metaFileToCleanup)) {
+              try { await Bun.spawn(["rm", "-f", metaFileToCleanup]).exited; } catch {}
+            }
           }
           
           return `Compiled: ${outputPath}\nDocument: ${draftInfo.title}\nPreset: ${draftInfo.preset}`;
@@ -468,6 +821,11 @@ export const DocsPlugin: Plugin = async (ctx) => {
           if (info.config.template) {
             lines.push(`Template: ${info.config.template.path} (${info.template_available ? "installed" : "not installed"})`);
           }
+          if (info.config.citation?.backend || info.config.citation?.style) {
+            lines.push(
+              `Citations: ${info.config.citation?.style || "default"} via ${info.config.citation?.backend || "citeproc"}`
+            );
+          }
           if (info.available_logos?.length) lines.push(`Logos: ${info.available_logos.join(", ")}`);
           if (info.config.required_fields) lines.push(`Required: ${info.config.required_fields.join(", ")}`);
           return lines.join("\n");
@@ -532,7 +890,7 @@ export const DocsPlugin: Plugin = async (ctx) => {
             return `Installed eisvogel to ${dest}`;
           }
 
-          // IEEE needs special handling - download template AND class file
+          // IEEE needs special handling - download template and BibTeX assets
           if (args.source === "ieee") {
             const ieeeDir = `${userDir}/templates/ieee`;
             await Bun.spawn(["mkdir", "-p", ieeeDir]).exited;
@@ -542,15 +900,22 @@ export const DocsPlugin: Plugin = async (ctx) => {
             if (!tplRes.ok) throw new Error(`Template download failed: HTTP ${tplRes.status}`);
             await Bun.write(`${ieeeDir}/template.latex`, await tplRes.text());
 
-            // Download IEEEtran.cls from CTAN (required for compilation)
-            const clsProc = Bun.spawn(["curl", "-sL", "-o", `${ieeeDir}/IEEEtran.cls`, "http://mirrors.ctan.org/macros/latex/contrib/IEEEtran/IEEEtran.cls"], { stdout: "pipe", stderr: "pipe" });
-            await clsProc.exited;
-            if (clsProc.exitCode !== 0) {
-              throw new Error("Failed to download IEEEtran.cls from CTAN");
+            const ieeeAssets = [
+              ["IEEEtran.cls", "https://mirrors.ctan.org/macros/latex/contrib/IEEEtran/IEEEtran.cls"],
+              ["IEEEtran.bst", "https://mirrors.ctan.org/biblio/bibtex/contrib/IEEEtran/IEEEtran.bst"],
+              ["IEEEtranN.bst", "https://mirrors.ctan.org/biblio/bibtex/contrib/IEEEtran/IEEEtranN.bst"],
+            ] as const;
+
+            for (const [fileName, url] of ieeeAssets) {
+              const proc = Bun.spawn(["curl", "-sL", "-o", `${ieeeDir}/${fileName}`, url], { stdout: "pipe", stderr: "pipe" });
+              await proc.exited;
+              if (proc.exitCode !== 0) {
+                throw new Error(`Failed to download ${fileName} from CTAN`);
+              }
             }
 
             presetManager.clearCache();
-            return `Installed IEEE template + IEEEtran.cls to ${ieeeDir}`;
+            return `Installed IEEE template and BibTeX assets to ${ieeeDir}`;
           }
 
           // Other templates use direct URL download
@@ -583,26 +948,51 @@ export const DocsPlugin: Plugin = async (ctx) => {
           abstract: tool.schema.string().optional(),
           keywords: tool.schema.string().optional(),
           bibliography: tool.schema.string().optional().describe("Path to .bib file"),
+          citation_style: tool.schema.enum(CITATION_STYLE_VALUES).optional().describe("Citation style/backend selector (default, none, ieee, apa, acm)"),
         },
         async execute(args) {
+          const inputPath = toAbsolutePath(args.input_path, workspaceRoot);
           const preset = await presetManager.loadPreset(args.preset, args.logo);
           if (preset.template?.path && !preset.resolved_template_path) {
             throw new Error(`Template '${preset.template.path}' not found. Use docs_templates_install.`);
           }
-          const outputPath = computeOutputPath(args.input_path, args.output_dir, "pdf");
-          const builder = pandoc().input(args.input_path).output(outputPath).applyPreset(preset).listings()
-            .applyMetadata({ title: args.title, author: args.author, date: args.date, subtitle: args.subtitle, abstract: args.abstract, keywords: args.keywords });
-          if (args.bibliography) builder.bibliography(args.bibliography);
-          // For IEEE templates, run from template directory so LaTeX can find IEEEtran.cls
-          const isIeee = preset.name?.includes('ieee') || args.preset?.includes('ieee');
-          let cwd: string | undefined;
-          if (isIeee && preset.resolved_template_path) {
-            cwd = preset.resolved_template_path.split("/").slice(0, -1).join("/");
-            // Use simple tables for IEEE compatibility
-            builder.simpleTables();
+
+          const bibliographyPath = resolveBibliographyPath(args.bibliography, dirname(inputPath));
+          const citationConfig = resolveCitationConfig(resolver, args.citation_style, bibliographyPath, preset);
+          assertCitationRequirements(inputPath, bibliographyPath, citationConfig);
+
+          const outputPath = computeOutputPath(inputPath, args.output_dir, "pdf");
+          const inputFormatOverride = citationConfig.style === "none"
+            ? withoutCitationsInputFormat(preset.pandoc?.from)
+            : undefined;
+          const applyCommonBuilderConfig = (builder: ReturnType<typeof pandoc>) => {
+            builder.applyPreset(preset, { includeCsl: false, inputFormatOverride }).listings()
+              .applyMetadata({ title: args.title, author: args.author, date: args.date, subtitle: args.subtitle, abstract: args.abstract, keywords: args.keywords });
+            applyCitationConfig(builder, bibliographyPath, citationConfig);
+
+            if (usesIeeeFormatting(preset)) {
+              builder.simpleTables();
+            }
+          };
+
+          if (citationConfig.backend === "natbib") {
+            const buildDir = ensureBuildDir(dirname(outputPath), parse(outputPath).name);
+            const texPath = join(buildDir, `${parse(outputPath).name}.tex`);
+            const builder = pandoc().input(inputPath).output(texPath);
+            applyCommonBuilderConfig(builder);
+
+            const result = await builder.execute(buildDir);
+            if (!result.success) throw new Error(`Failed:\n${result.error}`);
+
+            await compilePdfWithBibtex(texPath, outputPath, preset.resolved_template_path, dirname(inputPath));
+          } else {
+            const builder = pandoc().input(inputPath).output(outputPath);
+            applyCommonBuilderConfig(builder);
+
+            const result = await builder.execute();
+            if (!result.success) throw new Error(`Failed:\n${result.error}`);
           }
-          const result = await builder.execute(cwd);
-          if (!result.success) throw new Error(`Failed:\n${result.error}`);
+
           return `Created: ${outputPath}\nPreset: ${preset.name}`;
         },
       }),
@@ -617,21 +1007,49 @@ export const DocsPlugin: Plugin = async (ctx) => {
           abstract: tool.schema.string(),
           keywords: tool.schema.string().optional(),
           bibliography: tool.schema.string().optional(),
+          citation_style: tool.schema.enum(CITATION_STYLE_VALUES).optional().describe("Citation style/backend selector (default, none, ieee, apa, acm)"),
           output_dir: tool.schema.string().optional(),
         },
         async execute(args) {
+          const inputPath = toAbsolutePath(args.input_path, workspaceRoot);
           const preset = await presetManager.loadPreset(args.format === "journal" ? "ieee-journal" : "ieee-conference");
           if (!preset.resolved_template_path) throw new Error("IEEE template not found. Run: docs_templates_install ieee");
-          const outputPath = computeOutputPath(args.input_path, args.output_dir, "pdf");
-          const builder = pandoc().input(args.input_path).output(outputPath).applyPreset(preset)
-            .applyMetadata({ title: args.title, author: args.author, abstract: args.abstract, keywords: args.keywords });
-          if (args.bibliography) builder.bibliography(args.bibliography);
-          // Run from template directory so LaTeX can find IEEEtran.cls
-          // Use simple tables for IEEE compatibility
-          builder.simpleTables();
-          const templateDir = preset.resolved_template_path.split("/").slice(0, -1).join("/");
-          const result = await builder.execute(templateDir);
-          if (!result.success) throw new Error(`Failed:\n${result.error}`);
+
+          const bibliographyPath = resolveBibliographyPath(args.bibliography, dirname(inputPath));
+          const citationConfig = resolveCitationConfig(resolver, args.citation_style, bibliographyPath, preset);
+          assertCitationRequirements(inputPath, bibliographyPath, citationConfig);
+
+          const outputPath = computeOutputPath(inputPath, args.output_dir, "pdf");
+          const inputFormatOverride = citationConfig.style === "none"
+            ? withoutCitationsInputFormat(preset.pandoc?.from)
+            : undefined;
+          const applyCommonBuilderConfig = (builder: ReturnType<typeof pandoc>) => {
+            builder.applyPreset(preset, { includeCsl: false, inputFormatOverride })
+              .applyMetadata({ title: args.title, author: args.author, abstract: args.abstract, keywords: args.keywords });
+            if (usesIeeeFormatting(preset)) {
+              builder.simpleTables();
+            }
+            applyCitationConfig(builder, bibliographyPath, citationConfig);
+          };
+
+          if (citationConfig.backend === "natbib") {
+            const buildDir = ensureBuildDir(dirname(outputPath), parse(outputPath).name);
+            const texPath = join(buildDir, `${parse(outputPath).name}.tex`);
+            const builder = pandoc().input(inputPath).output(texPath);
+            applyCommonBuilderConfig(builder);
+
+            const result = await builder.execute(buildDir);
+            if (!result.success) throw new Error(`Failed:\n${result.error}`);
+
+            await compilePdfWithBibtex(texPath, outputPath, preset.resolved_template_path, dirname(inputPath));
+          } else {
+            const builder = pandoc().input(inputPath).output(outputPath);
+            applyCommonBuilderConfig(builder);
+
+            const result = await builder.execute();
+            if (!result.success) throw new Error(`Failed:\n${result.error}`);
+          }
+
           return `Created IEEE ${args.format || "conference"} paper: ${outputPath}`;
         },
       }),
@@ -650,32 +1068,53 @@ export const DocsPlugin: Plugin = async (ctx) => {
           abstract: tool.schema.string().optional(),
           keywords: tool.schema.string().optional(),
           bibliography: tool.schema.string().optional().describe("Path to .bib file"),
+          citation_style: tool.schema.enum(CITATION_STYLE_VALUES).optional().describe("Citation style/backend selector (default, none, ieee, apa, acm)"),
         },
         async execute(args) {
+          const inputPath = toAbsolutePath(args.input_path, workspaceRoot);
           const preset = await presetManager.loadPreset(args.preset, args.logo);
           if (preset.template?.path && !preset.resolved_template_path) {
             throw new Error(`Template '${preset.template.path}' not found. Use docs_templates_install.`);
           }
+
+          const bibliographyPath = resolveBibliographyPath(args.bibliography, dirname(inputPath));
+          const citationConfig = resolveCitationConfig(resolver, args.citation_style, bibliographyPath, preset);
+          assertCitationRequirements(inputPath, bibliographyPath, citationConfig);
           
           // Determine output path
-          const outputPath = args.output_path || computeOutputPath(args.input_path, undefined, "tex").replace(/\.pdf$/, '.tex');
+          const outputPath = args.output_path || computeOutputPath(inputPath, undefined, "tex").replace(/\.pdf$/, '.tex');
+          const inputFormatOverride = citationConfig.style === "none"
+            ? withoutCitationsInputFormat(preset.pandoc?.from)
+            : undefined;
           
           // Build pandoc command for LaTeX output (not PDF)
-          const builder = pandoc().input(args.input_path).output(outputPath).applyPreset(preset)
+          const builder = pandoc().input(inputPath).output(outputPath).applyPreset(preset, { includeCsl: false, inputFormatOverride })
             .applyMetadata({ title: args.title, author: args.author, date: args.date, subtitle: args.subtitle, abstract: args.abstract, keywords: args.keywords });
           
-          if (args.bibliography) builder.bibliography(args.bibliography);
+          applyCitationConfig(builder, bibliographyPath, citationConfig);
           
           // For IEEE templates, use simple tables
-          const isIeee = preset.name?.includes('ieee') || args.preset?.includes('ieee');
-          if (isIeee) {
+          if (usesIeeeFormatting(preset)) {
             builder.simpleTables();
           }
           
           const result = await builder.execute();
           if (!result.success) throw new Error(`Failed:\n${result.error}`);
+
+          if (citationConfig.backend === "natbib") {
+            stageLatexSupportFiles(preset.resolved_template_path, dirname(outputPath));
+          }
           
-          return `Generated LaTeX: ${outputPath}\nPreset: ${preset.name}\n\nTo compile manually:\npdflatex ${outputPath.split('/').pop()}`;
+          const compileInstructions = citationConfig.backend === "natbib"
+            ? [
+                `pdflatex ${outputPath.split('/').pop()}`,
+                `bibtex ${parse(outputPath).name}`,
+                `pdflatex ${outputPath.split('/').pop()}`,
+                `pdflatex ${outputPath.split('/').pop()}`,
+              ].join("\n")
+            : `pdflatex ${outputPath.split('/').pop()}`;
+
+          return `Generated LaTeX: ${outputPath}\nPreset: ${preset.name}\n\nTo compile manually:\n${compileInstructions}`;
         },
       }),
 
@@ -700,21 +1139,31 @@ export const DocsPlugin: Plugin = async (ctx) => {
           version: tool.schema.string().optional().describe("Document version (e.g., '1.1')"),
           project_topic_id: tool.schema.string().optional().describe("Project topic ID (e.g., 'N')"),
           include_toc: tool.schema.boolean().optional().describe("Include table of contents (default: true)"),
+          bibliography: tool.schema.string().optional().describe("Path to .bib file"),
+          citation_style: tool.schema.enum(CITATION_STYLE_VALUES).optional().describe("Citation style/backend selector (default, none, ieee, apa, acm)"),
         },
         async execute(args) {
+          const inputPath = toAbsolutePath(args.input_path, workspaceRoot);
           const preset = await presetManager.loadPreset("school-report");
           if (!preset.resolved_template_path) {
             throw new Error("School report template not found at sit-uofg/template.latex");
           }
 
-          const outputPath = computeOutputPath(args.input_path, args.output_dir, "pdf");
-          const builder = pandoc().input(args.input_path).output(outputPath)
+          const bibliographyPath = resolveBibliographyPath(args.bibliography, dirname(inputPath));
+          const citationConfig = resolveCitationConfig(resolver, args.citation_style, bibliographyPath, preset);
+          assertCitationRequirements(inputPath, bibliographyPath, citationConfig);
+
+          const outputPath = computeOutputPath(inputPath, args.output_dir, "pdf");
+          const builder = pandoc().input(inputPath).output(outputPath)
             .template(preset.resolved_template_path)
             .pdfEngine("xelatex")
             .listings();
 
           // Apply format
-          if (preset.pandoc?.from) builder.from(preset.pandoc.from);
+          const inputFormat = citationConfig.style === "none"
+            ? withoutCitationsInputFormat(preset.pandoc?.from)
+            : preset.pandoc?.from;
+          if (inputFormat) builder.from(inputFormat);
 
           // Margins
           if (args.margin) {
@@ -792,6 +1241,8 @@ export const DocsPlugin: Plugin = async (ctx) => {
           builder.variable("linkcolor", "blue");
           builder.variable("numbersections", true);
 
+          applyCitationConfig(builder, bibliographyPath, citationConfig);
+
           const result = await builder.execute();
           if (!result.success) throw new Error(`Failed:\n${result.error}`);
 
@@ -815,17 +1266,25 @@ export const DocsPlugin: Plugin = async (ctx) => {
           title_color: tool.schema.string().optional().describe("Hex color (default: 06386e)"),
           include_toc: tool.schema.boolean().optional(),
           output_dir: tool.schema.string().optional(),
+          bibliography: tool.schema.string().optional().describe("Path to .bib file"),
+          citation_style: tool.schema.enum(CITATION_STYLE_VALUES).optional().describe("Citation style/backend selector (default, none, ieee, apa, acm)"),
         },
         async execute(args) {
           const tpl = resolver.resolveTemplate(args.template || "eisvogel");
           if (!tpl) throw new Error(`Template not found. Run: docs_templates_install eisvogel`);
-          const outputPath = computeOutputPath(args.input_path, args.output_dir, "pdf");
-          const builder = pandoc().input(args.input_path).output(outputPath).from("markdown-smart")
+          const inputPath = toAbsolutePath(args.input_path, workspaceRoot);
+          const bibliographyPath = resolveBibliographyPath(args.bibliography, dirname(inputPath));
+          const citationConfig = resolveCitationConfig(resolver, args.citation_style, bibliographyPath);
+          assertCitationRequirements(inputPath, bibliographyPath, citationConfig);
+          const outputPath = computeOutputPath(inputPath, args.output_dir, "pdf");
+          const builder = pandoc().input(inputPath).output(outputPath)
+            .from(citationConfig.style === "none" ? withoutCitationsInputFormat("markdown-smart") : "markdown-smart")
             .template(tpl.path).pdfEngine("xelatex").listings()
             .variable("titlepage", true).variable("titlepage-color", args.title_color || "06386e")
             .variable("titlepage-text-color", "FFFFFF").variable("colorlinks", true);
           if (args.include_toc !== false) builder.toc().variable("toc-own-page", true);
           builder.applyMetadata({ title: args.title, author: args.author, date: args.date });
+          applyCitationConfig(builder, bibliographyPath, citationConfig);
           const result = await builder.execute();
           if (!result.success) throw new Error(`Failed:\n${result.error}`);
           return `Created: ${outputPath}`;
