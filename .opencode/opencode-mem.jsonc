@@ -1,0 +1,46 @@
+{
+  // Project-level opencode-mem defaults.
+  // Global config still lives at ~/.config/opencode/opencode-mem.jsonc;
+  // values here override it when this repo is the active OpenCode project.
+  "storagePath": "~/.opencode-mem/data",
+  "embeddingModel": "Xenova/nomic-embed-text-v1",
+  "vectorBackend": "usearch-first",
+
+  // Keep the memory UI local-only.
+  "webServerEnabled": true,
+  "webServerHost": "127.0.0.1",
+  "webServerPort": 4747,
+
+  // Safe default: explicit/manual memory only.
+  "autoCaptureEnabled": false,
+  "autoCaptureLanguage": "auto",
+  "injectProfile": false,
+
+  // Reduce ambient noise; keep real errors visible.
+  "showAutoCaptureToasts": false,
+  "showUserProfileToasts": false,
+  "showErrorToasts": true,
+
+  // Search/list defaults for the memory tool.
+  "maxMemories": 10,
+  "similarityThreshold": 0.6,
+
+  // Avoid stale or duplicated memory accumulation without being overly aggressive.
+  "autoCleanupEnabled": true,
+  "autoCleanupRetentionDays": 180,
+  "deduplicationEnabled": true,
+  "deduplicationSimilarityThreshold": 0.9,
+
+  // Conservative context injection.
+  "compaction": {
+    "enabled": true,
+    "memoryLimit": 5
+  },
+  "chatMessage": {
+    "enabled": true,
+    "maxMemories": 3,
+    "excludeCurrentSession": true,
+    "maxAgeDays": 60,
+    "injectOn": "first"
+  }
+}
