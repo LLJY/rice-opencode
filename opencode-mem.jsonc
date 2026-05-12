@@ -1,7 +1,5 @@
 {
-  // Project-level opencode-mem defaults.
-  // Global config still lives at ~/.config/opencode/opencode-mem.jsonc;
-  // values here override it when this repo is the active OpenCode project.
+  // opencode-mem defaults for this OpenCode config directory.
   "storagePath": "~/.opencode-mem/data",
   "embeddingModel": "Xenova/nomic-embed-text-v1",
   "vectorBackend": "usearch-first",
