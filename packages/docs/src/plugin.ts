@@ -153,6 +153,14 @@ function toAbsolutePath(path: string, baseDir: string): string {
   return isAbsolute(path) ? path : resolve(baseDir, path);
 }
 
+function resolveRequiredAssetPath(resolver: TemplateResolver, fileName: string): string {
+  const resolved = resolver.resolveAsset(`assets/${fileName}`);
+  if (!resolved) {
+    throw new Error(`Required asset not found: assets/${fileName}`);
+  }
+  return resolved.path;
+}
+
 function resolveBibliographyPath(
   explicitPath: string | undefined,
   baseDir: string,
@@ -431,6 +439,8 @@ export const DocsPlugin: Plugin = async (ctx) => {
   const resolver = new TemplateResolver({ projectRoot: ctx.worktree || ctx.directory });
   const presetManager = new PresetManager(resolver);
   const workspaceRoot = ctx.worktree || ctx.directory;
+  const sitLogoPath = resolveRequiredAssetPath(resolver, "sit-logo.png");
+  const uofgLogoPath = resolveRequiredAssetPath(resolver, "uofg-logo.png");
 
   return {
     tool: {
@@ -644,15 +654,14 @@ export const DocsPlugin: Plugin = async (ctx) => {
               applyCitationConfig(builder, bibliographyPath, citationConfig);
 
               if (args.logo) {
-                const assetsDir = resolver.getUserConfigDir() + "/assets";
                 if (args.logo === "sit") {
-                  builder.variable("logo-mode", "single").variable("sit-logo", `${assetsDir}/sit-logo.png`);
+                  builder.variable("logo-mode", "single").variable("sit-logo", sitLogoPath);
                 } else if (args.logo === "uofg") {
-                  builder.variable("logo-mode", "single").variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
+                  builder.variable("logo-mode", "single").variable("uofg-logo", uofgLogoPath);
                 } else if (args.logo === "both") {
                   builder.variable("logo-mode", "both")
-                    .variable("sit-logo", `${assetsDir}/sit-logo.png`)
-                    .variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
+                    .variable("sit-logo", sitLogoPath)
+                    .variable("uofg-logo", uofgLogoPath);
                 }
               }
               if (args.course) builder.variable("course", args.course);
@@ -1177,17 +1186,16 @@ export const DocsPlugin: Plugin = async (ctx) => {
 
           // Logos - resolve paths from assets
           if (args.logo) {
-            const assetsDir = resolver.getUserConfigDir() + "/assets";
             if (args.logo === "sit") {
               builder.variable("logo-mode", "single");
-              builder.variable("sit-logo", `${assetsDir}/sit-logo.png`);
+              builder.variable("sit-logo", sitLogoPath);
             } else if (args.logo === "uofg") {
               builder.variable("logo-mode", "single");
-              builder.variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
+              builder.variable("uofg-logo", uofgLogoPath);
             } else if (args.logo === "both") {
               builder.variable("logo-mode", "both");
-              builder.variable("sit-logo", `${assetsDir}/sit-logo.png`);
-              builder.variable("uofg-logo", `${assetsDir}/uofg-logo.png`);
+              builder.variable("sit-logo", sitLogoPath);
+              builder.variable("uofg-logo", uofgLogoPath);
             }
           }
 

@@ -232,7 +232,7 @@ export class PresetManager {
       const content = readFileSync(resolved.path, "utf-8");
       preset = parseYaml(content) as PresetConfig;
       sourcePath = resolved.path;
-      sourceType = resolved.source;
+      sourceType = resolved.source === "bundled" ? "user" : resolved.source;
     }
 
     // Handle inheritance
@@ -412,7 +412,7 @@ export class PresetManager {
       }
       const content = readFileSync(resolved.path, "utf-8");
       config = parseYaml(content) as PresetConfig;
-      source = resolved.source;
+      source = resolved.source === "bundled" ? "user" : resolved.source;
       path = resolved.path;
     }
 
