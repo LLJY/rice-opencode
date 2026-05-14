@@ -1,27 +1,65 @@
 # rice-opencode
 
-Personal OpenCode configuration backup and custom plugins.
+Personal OpenCode configuration preset and separate plugin packages.
 
 ## What is this?
 
 This repository contains my OpenCode-AI configuration, including:
 
 - **Custom agents** - Specialized AI agent prompts for different tasks
-- **Document generation plugin** - Pandoc-based tool for creating PDFs, academic papers, and reports
+- **Document generation plugin package** - Plugin-v2-compliant Pandoc-based docs tools under `packages/docs`
 - **Templates** - LaTeX templates for IEEE papers, school reports (SIT/UofG)
 - **MCP server configs** - GitHub, Context7, DeepWiki, Brave Search, DDG Search
 
 ## Structure
 
 ```
-├── agents/           # Agent prompt files (referenced by opencode.json)
-├── plugins/          # OpenCode plugin source (TypeScript)
-├── src/              # Supporting modules for plugins
+├── agents/           # Agent prompt files
+├── commands/         # Slash commands
+├── skills/           # Skills
+├── packages/docs/    # Main docs plugin package
+├── packages/viz/     # Experimental viz plugin package (not loaded by default)
 ├── pandoc/
 │   ├── assets/       # Logo images (SIT, UofG)
 │   └── templates/    # LaTeX templates
-└── opencode.json     # Main OpenCode configuration
+└── opencode.json     # Main OpenCode config preset + local plugin path
 ```
+
+## Architecture Notes
+
+This repo is no longer just "one plugin".
+
+It is split into:
+
+- a **config/preset layer** (`agents`, `commands`, `skills`, `opencode.json`)
+- a **plugin package layer** (`packages/docs`, `packages/viz`, `packages/shared`)
+
+### Stable package
+
+`packages/docs` is the main stable package.
+
+- package name: `@rice-opencode/docs`
+- plugin-v2 server entrypoint: `packages/docs/src/server.ts`
+- implementation: `packages/docs/src/plugin.ts`
+- bundled templates/assets live under `packages/docs/pandoc/`
+
+### Experimental package
+
+`packages/viz` exists for future chart/diagram/table generation ideas.
+
+It is currently:
+
+- private
+- not loaded by default
+- not part of the stable user-facing path
+
+### Intent
+
+The current architecture is aiming for:
+
+- one clean, publishable docs plugin package
+- one local OpenCode preset that can load that package
+- room for a future all-in-one harness later, without forcing unfinished features into the default setup
 
 ## Agents
 
@@ -37,7 +75,9 @@ This repository contains my OpenCode-AI configuration, including:
 
 ## Document Plugin
 
-The `plugins/docs.ts` provides tools for document generation:
+The main docs package is `@rice-opencode/docs` with a plugin-v2 server entrypoint at `packages/docs/src/server.ts`.
+
+Its tool implementation provides:
 
 - `docs_convert` - Basic format conversion via pandoc
 - `docs_create_styled_pdf` - Professional PDFs with Eisvogel template
@@ -68,5 +108,7 @@ The `plugins/docs.ts` provides tools for document generation:
 ## Notes
 
 - `opencode.json` uses `{env:VAR}` syntax for secrets - safe to commit
+- the docs plugin is loaded locally from `./packages/docs`
+- `researcher-mcp` still expects a shell-script launcher path for now
 - Actual API keys should be in `.env` (gitignored)
 - Templates require LaTeX installation (texlive-full recommended)

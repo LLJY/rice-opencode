@@ -4,7 +4,7 @@ Personal [OpenCode](https://opencode.ai) configuration — a complete AI-assiste
 
 ## Overview
 
-This repository contains a fully-featured OpenCode-AI configuration designed for professional software development workflows. It provides specialized AI agents for different tasks, integrated MCP servers for external knowledge sources, and a custom document generation plugin.
+This repository contains a fully-featured OpenCode configuration preset plus separate plugin packages. It provides specialized AI agents for different tasks, integrated MCP server config, and a plugin-v2-compliant document generation package.
 
 ## Features
 
@@ -30,7 +30,15 @@ This repository contains a fully-featured OpenCode-AI configuration designed for
 
 ### Document Generation Plugin
 
-Custom TypeScript plugin for creating professional documents:
+Main plugin package: `@rice-opencode/docs`
+
+Plugin-v2 structure:
+
+- package root export: `packages/docs/index.ts`
+- server entrypoint: `packages/docs/src/server.ts`
+- tool implementation: `packages/docs/src/plugin.ts`
+
+Capabilities:
 
 - **IEEE Papers** — Two-column conference and journal formats
 - **School Reports** — SIT/UofG branded reports with logos
@@ -42,39 +50,92 @@ Custom TypeScript plugin for creating professional documents:
 ## Repository Structure
 
 ```
-├── agents/                 # Agent prompt definitions
-│   ├── build.md            # Core builder methodology
-│   ├── chat.md             # General interactive agent
-│   ├── code-checker.md     # Code verification agent
-│   ├── document-proofreader.md
-│   ├── docs-first-coder.md # Documentation-first coding
-│   ├── explore.md          # File system navigator
-│   └── plan.md             # Planning agent
-├── plugins/                # OpenCode plugin source (TypeScript)
-│   └── docs.ts            # Document generation plugin
-├── src/                    # Supporting modules
-├── pandoc/                 # LaTeX templates and assets
-│   ├── assets/            # Logo images (SIT, UofG)
-│   └── templates/         # LaTeX templates
-└── opencode.json          # Main OpenCode configuration
+├── agents/                  # OpenCode agent definitions
+├── commands/                # OpenCode slash commands
+├── skills/                  # OpenCode skills
+├── opencode.json            # Config preset + MCP entries + local docs plugin path
+├── packages/
+│   ├── docs/                # Main plugin-v2-compliant docs package
+│   │   ├── index.ts
+│   │   ├── package.json
+│   │   ├── pandoc/          # Bundled templates/assets shipped with the package
+│   │   └── src/
+│   │       ├── plugin.ts    # Tool implementations
+│   │       └── server.ts    # Plugin v2 server module
+│   ├── viz/                 # Experimental plugin package, not loaded by default
+│   └── shared/              # Reserved for future internal utilities
+└── pandoc/                  # Workspace-level source assets mirrored into packages/docs
 ```
+
+## Architecture Notes
+
+This repo now has **two layers**:
+
+1. **OpenCode preset/config layer**
+   - `agents/`, `commands/`, `skills/`, and `opencode.json`
+   - this is the "rice" harness/config experience
+   - it decides which plugins and MCP servers are loaded locally
+
+2. **Plugin package layer**
+   - `packages/docs` is the real plugin-v2-compliant package
+   - `packages/viz` is an experimental private package and is **not** loaded by default
+   - `packages/shared` is reserved for future internal helpers
+
+### Plugin v2 shape
+
+The docs plugin follows the same general structure as modern OpenCode plugins such as `opencode-usage-tracker`:
+
+- `index.ts` — package root export
+- `src/server.ts` — plugin server module
+- `src/plugin.ts` — actual tool and hook implementation
+
+The important part is that `src/server.ts` default-exports a module shaped like:
+
+```ts
+{
+  id: "@rice-opencode/docs",
+  server: DocsPlugin,
+}
+```
+
+That is the plugin-v2-compatible server entrypoint shape.
+
+### Why `viz` exists
+
+`packages/viz` is a placeholder for future visualization features like charts, diagrams, and tables for reports/papers.
+
+Right now it is:
+
+- private
+- not loaded in `opencode.json`
+- not considered part of the stable default harness
+
+So for now, treat:
+
+- `docs` = real maintained plugin package
+- `viz` = future idea / stub
+
+### Can one package bundle multiple features?
+
+Yes. A future all-in-one harness can still be compliant if it:
+
+- combines multiple server-side features behind one `server` plugin module
+- keeps optional UI/TUI behavior in a separate `./tui` export
+- avoids loading unfinished features by default
+
+In this repo, we intentionally keep the stable docs feature separate and keep experimental work out of the default plugin path.
 
 ## Installation
 
-1. **Clone or copy** to your OpenCode configuration directory:
-   ```bash
-   # Global config
-   cp -r rice-opencode ~/.config/opencode/
-   
-   # Or project-local
-   cp rice-opencode/opencode.json ./
-   ```
-
-2. **Install dependencies:**
+1. **Clone this repository** and install workspace dependencies:
    ```bash
    bun install
-   # or
-   npm install
+   ```
+
+2. **Use the bundled local docs plugin path** from this repository:
+   ```bash
+   # already configured in opencode.json
+   # plugin: ["./packages/docs", ...]
    ```
 
 3. **Create `.env` with API keys:**
@@ -92,6 +153,16 @@ Custom TypeScript plugin for creating professional documents:
    # macOS
    brew install --cask mactex
    ```
+
+### Publishing the docs plugin separately
+
+The main publishable package is `packages/docs`.
+
+- local development path: `./packages/docs`
+- package root export: `@rice-opencode/docs`
+- explicit server subpath: `@rice-opencode/docs/server`
+
+`viz` is intentionally not loaded by default.
 
 ## Usage
 
@@ -140,7 +211,9 @@ Project skill available:
 ## Configuration Notes
 
 - `opencode.json` uses `{env:VAR}` syntax for secrets — safe to commit
-- Agent prompts in `agents/` are referenced via `{file:path}` syntax
+- Agents/commands/skills are loaded from their directories directly
+- The local docs plugin is loaded from `./packages/docs`
+- `researcher-mcp` is still shell-script based for now and expected to resolve via `.opencode/researcher-mcp.sh`
 - Actual API keys should be in `.env` (gitignored)
 
 ## Requirements

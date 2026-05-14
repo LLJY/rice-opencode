@@ -2,15 +2,28 @@
   "name": "@rice-opencode/docs",
   "version": "1.0.0",
   "description": "Document generation plugin for OpenCode",
-  "main": "src/plugin.ts",
+  "type": "module",
+  "main": "./index.ts",
+  "module": "./index.ts",
+  "exports": {
+    ".": {
+      "import": "./index.ts"
+    },
+    "./server": {
+      "import": "./src/server.ts"
+    }
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "pandoc"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --noEmit -p ../../tsconfig.json",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
+    "@opencode-ai/plugin": "1.14.48",
     "yaml": "^2.3.0"
-  },
-  "peerDependencies": {
-    "@opencode-ai/plugin": "*"
   }
 }

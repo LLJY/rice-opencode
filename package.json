@@ -1,14 +1,19 @@
 {
-  "name": "rice-opencode-docs",
+  "name": "rice-opencode",
   "version": "1.0.0",
-  "description": "Pandoc-based document generation plugin for OpenCode",
+  "description": "OpenCode config preset and plugin workspace",
+  "private": true,
   "type": "module",
-  "main": "refs/docs.ts",
+  "workspaces": [
+    "packages/docs",
+    "packages/viz",
+    "packages/shared"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "*",
+    "@opencode-ai/plugin": "1.14.48",
     "yaml": "^2.3.4"
   },
   "devDependencies": {

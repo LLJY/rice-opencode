@@ -10,9 +10,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["bun-types"],
-    "lib": ["ESNext"]
+    "types": ["bun"],
+    "lib": ["ESNext", "DOM"]
   },
-  "include": ["src/**/*.ts", "refs/**/*.ts", "plugins/**/*.ts"],
+  "include": ["packages/**/*.ts", "packages/**/*.tsx"],
   "exclude": ["node_modules"]
 }

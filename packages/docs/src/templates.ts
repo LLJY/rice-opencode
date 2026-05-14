@@ -1,6 +1,7 @@
-import { existsSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, readdirSync, statSync } from "fs";
+import { dirname, join } from "path";
 import { homedir } from "os";
+import { fileURLToPath } from "url";
 
 /**
  * XDG-compliant path resolution for pandoc templates and presets.
@@ -13,21 +14,25 @@ export interface ResolverConfig {
 
 export interface ResolvedPath {
   path: string;
-  source: "project" | "user";
+  source: "project" | "user" | "bundled";
 }
 
 const XDG_CONFIG_HOME = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
 const USER_PANDOC_DIR = join(XDG_CONFIG_HOME, "opencode", "pandoc");
+const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const BUNDLED_PANDOC_DIR = join(PACKAGE_ROOT, "pandoc");
 
 export class TemplateResolver {
   private projectRoot: string | null;
   private projectPandocDir: string | null;
+  private bundledPandocDir: string;
 
   constructor(config: ResolverConfig = {}) {
     this.projectRoot = config.projectRoot || process.cwd();
     this.projectPandocDir = this.projectRoot
       ? join(this.projectRoot, ".opencode", "pandoc")
       : null;
+    this.bundledPandocDir = BUNDLED_PANDOC_DIR;
   }
 
   /**
@@ -42,6 +47,10 @@ export class TemplateResolver {
    */
   getProjectConfigDir(): string | null {
     return this.projectPandocDir;
+  }
+
+  getBundledConfigDir(): string {
+    return this.bundledPandocDir;
   }
 
   /**
@@ -59,7 +68,7 @@ export class TemplateResolver {
     // Search project-local first
     if (this.projectPandocDir) {
       const projectPath = join(this.projectPandocDir, "templates", templateName);
-      if (existsSync(projectPath)) {
+      if (existsSync(projectPath) && statSync(projectPath).isFile()) {
         return { path: projectPath, source: "project" };
       }
       // Try with .latex extension
@@ -74,7 +83,7 @@ export class TemplateResolver {
 
     // Search user config
     const userPath = join(USER_PANDOC_DIR, "templates", templateName);
-    if (existsSync(userPath)) {
+    if (existsSync(userPath) && statSync(userPath).isFile()) {
       return { path: userPath, source: "user" };
     }
     // Try with .latex extension
@@ -84,6 +93,17 @@ export class TemplateResolver {
     // Try as directory with template.latex inside
     if (existsSync(join(userPath, "template.latex"))) {
       return { path: join(userPath, "template.latex"), source: "user" };
+    }
+
+    const bundledPath = join(this.bundledPandocDir, "templates", templateName);
+    if (existsSync(bundledPath) && statSync(bundledPath).isFile()) {
+      return { path: bundledPath, source: "bundled" };
+    }
+    if (!templateName.includes(".") && existsSync(bundledPath + ".latex")) {
+      return { path: bundledPath + ".latex", source: "bundled" };
+    }
+    if (existsSync(join(bundledPath, "template.latex"))) {
+      return { path: join(bundledPath, "template.latex"), source: "bundled" };
     }
 
     return null;
@@ -195,20 +215,25 @@ export class TemplateResolver {
       }
     }
 
+    const bundledPath = join(this.bundledPandocDir, assetPath);
+    if (existsSync(bundledPath)) {
+      return { path: bundledPath, source: "bundled" };
+    }
+
     return null;
   }
 
   /**
    * List all available templates
    */
-  listTemplates(): Array<{ name: string; source: "project" | "user"; path: string }> {
-    const templates: Array<{ name: string; source: "project" | "user"; path: string }> = [];
+  listTemplates(): Array<{ name: string; source: "project" | "user" | "bundled"; path: string }> {
+    const templates: Array<{ name: string; source: "project" | "user" | "bundled"; path: string }> = [];
     const seen = new Set<string>();
 
-    const scanDir = (dir: string, source: "project" | "user") => {
+    const scanDir = (dir: string, source: "project" | "user" | "bundled") => {
       if (!existsSync(dir)) return;
       try {
-        const entries = Bun.spawnSync(["ls", "-1", dir]).stdout.toString().trim().split("\n");
+        const entries = readdirSync(dir);
         for (const entry of entries) {
           if (!entry) continue;
           const name = entry.replace(/\.latex$/, "");
@@ -216,8 +241,7 @@ export class TemplateResolver {
           seen.add(name);
 
           const entryPath = join(dir, entry);
-          const stat = Bun.spawnSync(["test", "-d", entryPath]);
-          if (stat.exitCode === 0) {
+          if (statSync(entryPath).isDirectory()) {
             // It's a directory - check for template.latex inside
             if (existsSync(join(entryPath, "template.latex"))) {
               templates.push({ name, source, path: join(entryPath, "template.latex") });
@@ -239,6 +263,9 @@ export class TemplateResolver {
     // Then scan user config
     scanDir(join(USER_PANDOC_DIR, "templates"), "user");
 
+    // Finally scan bundled package templates
+    scanDir(join(this.bundledPandocDir, "templates"), "bundled");
+
     return templates;
   }
 
@@ -252,8 +279,7 @@ export class TemplateResolver {
     const scanDir = (dir: string, source: "project" | "user") => {
       if (!existsSync(dir)) return;
       try {
-        const result = Bun.spawnSync(["find", dir, "-name", "*.yaml", "-type", "f"]);
-        const files = result.stdout.toString().trim().split("\n");
+        const files = walkFiles(dir, (file) => file.endsWith(".yaml"));
         for (const file of files) {
           if (!file) continue;
           const name = file.split("/").pop()?.replace(/\.yaml$/, "") || "";
@@ -287,7 +313,7 @@ export class TemplateResolver {
     const scanDir = (dir: string, source: "project" | "user") => {
       if (!existsSync(dir)) return;
       try {
-        const entries = Bun.spawnSync(["ls", "-1", dir]).stdout.toString().trim().split("\n");
+        const entries = readdirSync(dir);
         for (const entry of entries) {
           if (!entry || !entry.endsWith(".csl")) continue;
           const name = entry.replace(/\.csl$/, "");
@@ -329,9 +355,28 @@ export class TemplateResolver {
     ];
 
     for (const dir of dirs) {
-      await Bun.spawn(["mkdir", "-p", dir]).exited;
+      mkdirSync(dir, { recursive: true });
     }
   }
+}
+
+function walkFiles(dir: string, matcher: (path: string) => boolean): string[] {
+  if (!existsSync(dir)) return [];
+
+  const files: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const entryPath = join(dir, entry);
+    const stat = statSync(entryPath);
+    if (stat.isDirectory()) {
+      files.push(...walkFiles(entryPath, matcher));
+      continue;
+    }
+    if (matcher(entryPath)) {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
 }
 
 // Export a default resolver instance
