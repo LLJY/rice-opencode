@@ -18,6 +18,9 @@ Thumbs.db
 *.tmp
 /tmp/
 
+# Local planning notes
+planning/
+
 # Test outputs
 *.test.pdf
 
