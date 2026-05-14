@@ -1,7 +1,7 @@
 ---
 description: Code verification specialist. Three-pillar analysis: smells, spec alignment, correctness.
 mode: subagent
-model: openai/gpt-5.4
+model: openai/gpt-5.5
 variant: xhigh
 permission:
   read: allow

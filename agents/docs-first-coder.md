@@ -1,7 +1,7 @@
 ---
 description: Documentation-first coding expert. Verifies APIs against current docs before implementation.
 mode: subagent
-model: openai/gpt-5.4
+model: openai/gpt-5.5
 variant: medium
 permission:
   read: allow

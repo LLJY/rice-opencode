@@ -1,7 +1,7 @@
 ---
 description: Fast file system navigator. Locates files, logs, configs, or code relevant to tasks.
 mode: subagent
-model: openai/gpt-5.4-mini
+model: openai/gpt-5.5
 variant: high
 permission:
   bash: allow

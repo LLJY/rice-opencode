@@ -1,7 +1,7 @@
 ---
 description: General interactive agent. User-facing chat, planning, and safe execution.
 mode: primary
-model: openai/gpt-5.4
+model: openai/gpt-5.5
 variant: high
 permission:
   "*": allow

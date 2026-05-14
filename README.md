@@ -12,13 +12,13 @@ This repository contains a fully-featured OpenCode-AI configuration designed for
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| `plan` | GPT-5.4 | Requirements analysis and execution planning |
-| `chat` | GPT-5.4 | General interactive agent |
-| `build` | GPT-5.4 | High-agency implementation and verification |
-| `explore` | Gemini 3 Flash | Fast codebase navigation and file discovery |
-| `docs-first-coder` | Claude Opus 4.5 | Documentation-verified coding with live API research |
-| `code-checker` | Gemini 3 Flash | Code review, smells detection, and verification |
-| `document-proofreader` | GPT-5.4 | Academic proofreading and argument review |
+| `plan` | GPT-5.5 | Requirements analysis and execution planning |
+| `chat` | GPT-5.5 | General interactive agent |
+| `build` | GPT-5.5 | High-agency implementation and verification |
+| `explore` | GPT-5.5 | Fast codebase navigation and file discovery |
+| `docs-first-coder` | GPT-5.5 | Documentation-verified coding with live API research |
+| `code-checker` | GPT-5.5 | Code review, smells detection, and verification |
+| `document-proofreader` | GPT-5.5 | Academic proofreading and argument review |
 
 ### MCP Server Integrations
 
