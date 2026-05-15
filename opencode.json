@@ -1,12 +1,10 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "./packages/docs",
     "opencode-antigravity-auth@1.6.0",
     "opencode-anthropic-auth@0.0.13",
     "@mohak34/opencode-notifier@0.2.4",
     "opencode-mem@2.13.0",
-    "opencode-pty@0.3.4",
     "opencode-background-agents@0.1.1"
   ],
   "mcp": {
