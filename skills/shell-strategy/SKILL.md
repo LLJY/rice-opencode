@@ -1,6 +1,6 @@
 ---
 name: shell-strategy
-description: Use before shell-heavy work to avoid prompts and hangs; prefer non-interactive flags, native file tools, and PTY sessions for long-running processes.
+description: ALWAYS USE before executing shell commands; distro-aware non-interactive shell, package, service, and background-job patterns.
 license: MIT
 compatibility: opencode
 metadata:
@@ -10,123 +10,150 @@ metadata:
 
 ## Core rules
 
-The shell is non-interactive. Any command that waits for input, opens an editor, opens a pager, or starts a REPL can hang.
+Always use this skill before executing shell commands.
 
-- Use non-interactive flags up front: `-y`, `--yes`, `--force`, `--no-input`, `--no-edit`, `--non-interactive`.
-- Avoid editors, pagers, REPLs, and menu-driven commands in normal shell calls.
-- Prefer native file tools over shell file manipulation.
-- Use PTY sessions for dev servers, watch modes, REPLs, prompts, or long-running processes.
-- Add explicit timeouts for commands that might unexpectedly prompt or run indefinitely.
-- Never stop after a shell output just to wait for the shell to ask something; continue the task or ask the user directly.
+Always identify the target distro before distro-specific package or service commands. Local workstation is usually Arch Linux; servers are often Debian/Ubuntu; containers and remotes can differ.
 
-## PTY availability
+- Normal shell calls are non-interactive; avoid editors, pagers, REPLs, and menu prompts.
+- Prefer native file/read/search/edit tools over shell for file operations.
+- Use `timeout` for finite commands that may hang; use detached `screen`/`tmux` for long-running jobs.
+- Do not install/remove system packages, run full system upgrades, or start/stop/enable services unless the user asked.
+- Never run `sudo pacman -Sy` without `-u`; avoid partial upgrades.
 
-If PTY tools are available, use them instead of normal shell calls for:
+Check the target OS first:
 
-- dev servers
-- watch modes
-- REPLs
-- interactive prompts
-- long-running processes that should stay alive
+```bash
+cat /etc/os-release
+. /etc/os-release && printf 'ID=%s VERSION_ID=%s ID_LIKE=%s\n' "$ID" "$VERSION_ID" "$ID_LIKE"
+ssh -o BatchMode=yes host 'cat /etc/os-release'
+```
 
-Name the session clearly, read output when needed, and clean it up when done.
+Useful no-prompt prefix:
 
-## Helpful environment variables
+```bash
+CI=true GIT_TERMINAL_PROMPT=0 GIT_EDITOR=true GIT_PAGER=cat PAGER=cat SYSTEMD_PAGER=cat
+```
 
-| Variable | Value | Purpose |
-|----------|-------|---------|
-| `CI` | `true` | General CI detection |
-| `DEBIAN_FRONTEND` | `noninteractive` | Apt/dpkg prompts |
-| `GIT_TERMINAL_PROMPT` | `0` | Git auth prompts |
-| `GIT_EDITOR` | `true` | Block git editor |
-| `GIT_PAGER` | `cat` | Disable git pager |
-| `PAGER` | `cat` | Disable system pager |
-| `GCM_INTERACTIVE` | `never` | Git credential manager |
-| `HOMEBREW_NO_AUTO_UPDATE` | `1` | Homebrew updates |
-| `npm_config_yes` | `true` | NPM prompts |
-| `PIP_NO_INPUT` | `1` | Pip prompts |
-| `YARN_ENABLE_IMMUTABLE_INSTALLS` | `false` | Yarn lockfile prompts |
+## Arch package patterns
 
-## Command patterns
+Official repos:
 
-### Package Managers
+```bash
+pacman -Qi package
+pacman -Ss '^package$'
+sudo pacman -S --needed --noconfirm package
+```
 
-| Tool | Interactive (BAD) | Non-Interactive (GOOD) |
-|------|-------------------|------------------------|
-| **NPM** | `npm init` | `npm init -y` |
-| **NPM** | `npm install` | `npm install --yes` |
-| **Yarn** | `yarn install` | `yarn install --non-interactive` |
-| **PNPM** | `pnpm install` | `pnpm install --reporter=silent` |
-| **Bun** | `bun init` | `bun init -y` |
-| **APT** | `apt-get install pkg` | `apt-get install -y pkg` |
-| **APT** | `apt-get upgrade` | `apt-get upgrade -y` |
-| **PIP** | `pip install pkg` | `pip install --no-input pkg` |
-| **Homebrew** | `brew install pkg` | `HOMEBREW_NO_AUTO_UPDATE=1 brew install pkg` |
+System upgrades only when explicitly requested:
 
-### Git Operations
+```bash
+sudo pacman -Syu --noconfirm
+```
 
-| Action | Interactive (BAD) | Non-Interactive (GOOD) |
-|--------|-------------------|------------------------|
-| **Commit** | `git commit` | `git commit -m "msg"` |
-| **Merge** | `git merge branch` | `git merge --no-edit branch` |
-| **Pull** | `git pull` | `git pull --no-edit` |
-| **Rebase** | `git rebase -i` | `git rebase` only when non-interactive |
-| **Add** | `git add -p` | `git add .` or `git add <file>` |
-| **Log** | `git log` | `git --no-pager log -n 10` |
-| **Diff** | `git diff` | `git --no-pager diff` |
+AUR only when needed and an AUR helper exists:
 
-### System & Files
+```bash
+command -v paru || command -v yay
+paru -S --needed --noconfirm package
+```
 
-| Tool | Interactive (BAD) | Non-Interactive (GOOD) |
-|------|-------------------|------------------------|
-| **RM** | `rm -i file` | `rm -f file` |
-| **CP** | `cp -i a b` | `cp -f a b` |
-| **MV** | `mv -i a b` | `mv -f a b` |
-| **Unzip** | `unzip file.zip` | `unzip -o file.zip` |
-| **SSH** | `ssh host` | `ssh -o BatchMode=yes host` |
-| **SCP** | `scp file host:` | `scp -o BatchMode=yes file host:` |
-| **Curl** | `curl url` | `curl -fsSL url` |
-| **Wget** | `wget url` | `wget -q url` |
+Prefer official repos over AUR. Do not use `--overwrite`, `-Rdd`, or force flags unless the user explicitly approves the risk.
 
-### Docker
+## Debian/Ubuntu server patterns
 
-| Action | Interactive (BAD) | Non-Interactive (GOOD) |
-|--------|-------------------|------------------------|
-| **Run** | `docker run -it image` | `docker run image` |
-| **Exec** | `docker exec -it container bash` | `docker exec container cmd` |
-| **Build** | `docker build .` | `docker build --progress=plain .` |
-| **Compose** | `docker-compose up` | `docker-compose up -d` |
+Use `apt-get` for scripts and remote servers; set `DEBIAN_FRONTEND=noninteractive` for package changes.
 
-### Python/Node REPLs
+```bash
+apt-cache policy package
+apt-cache search '^package$'
+sudo apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y package
+```
 
-| Tool | Interactive (BAD) | Non-Interactive (GOOD) |
-|------|-------------------|------------------------|
-| **Python** | `python` | `python -c "code"` or `python script.py` |
-| **Node** | `node` | `node -e "code"` or `node script.js` |
-| **IPython** | `ipython` | Avoid; use `python -c` or a script |
+Server upgrades only when explicitly requested:
 
-## Avoid in normal shell calls
+```bash
+sudo DEBIAN_FRONTEND=noninteractive apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+```
 
-- **Editors**: `vim`, `vi`, `nano`, `emacs`, `pico`, `ed`
-- **Pagers**: `less`, `more`, `most`, `pg`
-- **Manual pages**: `man`
-- **Interactive git**: `git add -p`, `git rebase -i`, `git commit` without `-m`
-- **REPLs**: `python`, `node`, `irb`, `ghci` without script/command mode
-- **Interactive shells**: `bash -i`, `zsh -i`
+Avoid `dist-upgrade`, release upgrades, repository changes, and unattended service restarts unless the user explicitly approves the operational risk.
+
+## Services, logs, processes
+
+Read-only checks:
+
+```bash
+systemctl status service --no-pager
+systemctl --user status service --no-pager
+journalctl -u service --no-pager -n 200
+ss -ltnp
+ps -ef
+```
+
+Start/stop/restart/enable/disable services only when requested. Prefer graceful termination: `kill PID`, then escalate only if needed.
+
+## Project command patterns
+
+Use repo-native scripts first. Prefer Bun and uv where available.
+
+```bash
+bun install --frozen-lockfile
+bun run build
+bun test
+uv sync
+uv run pytest
+npm ci --yes
+docker compose up -d
+docker compose logs --no-color service
+```
+
+Git must not open editors or pagers:
+
+```bash
+git --no-pager status --short
+git --no-pager diff
+git commit -m "message"
+git merge --no-edit branch
+```
+
+Avoid `git add -p`, `git rebase -i`, and `git commit` without `-m`.
+
+## Background jobs with screen/tmux
+
+Use detached sessions for dev servers, watch modes, workers, or long tests when realtime output is not critical. Name sessions clearly, log to a stable file, inspect logs only when needed, and clean up explicitly.
+
+Prefer `screen`:
+
+```bash
+screen -dmS dev-server bash -lc 'bun run dev > /tmp/dev-server.log 2>&1'
+screen -ls
+tail -n 80 /tmp/dev-server.log
+screen -S dev-server -X stuff $'\003'
+screen -S dev-server -X stuff $'status\n'
+screen -S dev-server -X quit
+```
+
+Use `tmux` if `screen` is unavailable or the repo already uses it:
+
+```bash
+tmux new-session -d -s dev-server 'bun run dev > /tmp/dev-server.log 2>&1'
+tmux list-sessions
+tmux capture-pane -pt dev-server
+tmux send-keys -t dev-server C-c
+tmux send-keys -t dev-server 'status' Enter
+tmux kill-session -t dev-server
+```
 
 ## If a command needs input
 
-```bash
-yes | ./install_script.sh
-```
+Prefer non-interactive flags. Use piped input or heredocs only when the answers are known and safe:
 
 ```bash
+yes | ./install_script.sh
 ./configure.sh <<EOF
 option1
 option2
 EOF
-```
-
-```bash
-timeout 30 ./potentially_hanging_script.sh || echo "Timed out"
+timeout 30 ./potentially_hanging_script.sh || true
 ```
