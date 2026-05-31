@@ -77,6 +77,7 @@ Capabilities:
 ├── deprecated-agents/       # Archived agent prompts removed from active use
 ├── commands/               # OpenCode slash commands
 ├── skills/                 # OpenCode skills
+│   └── workflow/            # Durable workplan + delegation workflow skill
 ├── tools/
 │   └── workplan.ts         # Public workplan tool entrypoint
 ├── src/
@@ -229,6 +230,7 @@ Recommended scholarly workflow:
 Project skill available:
 
 - `docs-workflow` — on-demand OpenCode skill for choosing the right docs tool flow, presets, `refs.bib`, and `citation_style`
+- `workflow` — on-demand OpenCode skill for durable workplans, scoped delegation, validation, and review loops
 
 **Presets:**
 - `school-report` — SIT/UofG reports (`--logo sit|uofg|both`)
