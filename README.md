@@ -17,6 +17,7 @@ This repository contains a fully-featured OpenCode configuration preset plus sep
 | `chat` | GPT-5.5 | General interactive agent |
 | `build` | GPT-5.5 | High-agency implementation and verification |
 | `explore` | GPT-5.5 | Fast codebase navigation and file discovery |
+| `researcher` | GPT-5.4 | Literature-review research with optional read-only codebase context |
 | `code-writer` | GPT-5.5 | Documentation-first focused implementation subagent for scoped plan steps |
 | `code-checker` | GPT-5.5 | Code review, smells detection, and verification |
 | `document-proofreader` | GPT-5.5 | Academic proofreading and argument review |
@@ -73,6 +74,7 @@ Capabilities:
 │   ├── docs-first-coder.md # Disabled deprecated alias; use code-writer
 │   ├── explore.md          # File system navigator
 │   ├── plan.md             # SWE planning agent
+│   ├── researcher.md       # Literature-review research subagent
 │   └── swe.md              # SWE orchestrator
 ├── deprecated-agents/       # Archived agent prompts removed from active use
 ├── commands/               # OpenCode slash commands
@@ -201,6 +203,7 @@ Agents are invoked automatically by OpenCode based on task context, or you can r
 ```
 @explore find all configuration files in this project
 @swe implement a non-trivial feature with a durable workplan
+@researcher write a literature review on vector databases for RAG
 @code-writer implement a scoped React hook step following current React docs
 @code-checker review the auth module
 @document-proofreader review report.md
