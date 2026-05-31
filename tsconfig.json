@@ -13,6 +13,6 @@
     "types": ["bun"],
     "lib": ["ESNext", "DOM"]
   },
-  "include": ["packages/**/*.ts", "packages/**/*.tsx"],
+  "include": ["packages/**/*.ts", "packages/**/*.tsx", "src/**/*.ts", "refs/**/*.ts", "plugins/**/*.ts", "tools/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules"]
 }

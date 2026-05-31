@@ -13,12 +13,27 @@ This repository contains a fully-featured OpenCode configuration preset plus sep
 | Agent | Model | Purpose |
 |-------|-------|---------|
 | `plan` | GPT-5.5 | Requirements analysis and execution planning |
+| `swe` | GPT-5.5 | Software engineering orchestrator for multi-step code work |
 | `chat` | GPT-5.5 | General interactive agent |
 | `build` | GPT-5.5 | High-agency implementation and verification |
 | `explore` | GPT-5.5 | Fast codebase navigation and file discovery |
+| `code-writer` | GPT-5.5 | Focused implementation subagent for scoped plan steps |
 | `docs-first-coder` | GPT-5.5 | Documentation-verified coding with live API research |
 | `code-checker` | GPT-5.5 | Code review, smells detection, and verification |
 | `document-proofreader` | GPT-5.5 | Academic proofreading and argument review |
+
+### SWE Workplan Baseline
+
+This repo now includes a software-engineering baseline with durable workplan tools and agent prompts for structured multi-step execution.
+
+Available workplan tools:
+
+- `workplan_create` — create a persistent workplan under `.opencode/workplan/`
+- `workplan_inspect` — list stable phase/step ids for targeted updates
+- `workplan_list` / `workplan_read` — discover and inspect existing workplans
+- `workplan_update` — patch phases, steps, files, findings, and notes
+- `workplan_reset` — reset a stale plan or regenerate its markdown
+- `workplan_validate` — validate JSON metadata, linked markdown, and spec files
 
 ### MCP Server Integrations
 
@@ -50,21 +65,33 @@ Capabilities:
 ## Repository Structure
 
 ```
-├── agents/                  # OpenCode agent definitions
-├── commands/                # OpenCode slash commands
-├── skills/                  # OpenCode skills
-├── opencode.json            # Config preset + MCP entries + local docs plugin path
-├── packages/
-│   ├── docs/                # Main plugin-v2-compliant docs package
-│   │   ├── index.ts
-│   │   ├── package.json
-│   │   ├── pandoc/          # Bundled templates/assets shipped with the package
-│   │   └── src/
-│   │       ├── plugin.ts    # Tool implementations
-│   │       └── server.ts    # Plugin v2 server module
-│   ├── viz/                 # Experimental plugin package, not loaded by default
-│   └── shared/              # Reserved for future internal utilities
-└── pandoc/                  # Workspace-level source assets mirrored into packages/docs
+├── agents/                 # Agent prompt definitions
+│   ├── build.md            # Core builder methodology
+│   ├── chat.md             # General interactive agent
+│   ├── code-checker.md     # Code verification agent
+│   ├── code-writer.md      # Focused SWE implementation subagent
+│   ├── document-proofreader.md
+│   ├── docs-first-coder.md # Documentation-first coding
+│   ├── explore.md          # File system navigator
+│   ├── plan.md             # SWE planning agent
+│   └── swe.md              # SWE orchestrator
+├── commands/               # OpenCode slash commands
+├── skills/                 # OpenCode skills
+├── tools/
+│   └── workplan.ts         # Public workplan tool entrypoint
+├── src/
+│   └── custom-tools/
+│       └── workplan/       # Workplan tool implementation
+├── tests/
+│   └── workplan/           # Focused workplan tool tests
+├── packages/               # TypeScript package/plugin code
+│   ├── docs/
+│   ├── shared/
+│   └── viz/
+├── pandoc/                 # LaTeX templates and assets
+│   ├── assets/            # Logo images (SIT, UofG)
+│   └── templates/         # LaTeX templates
+└── opencode.json          # Config preset + MCP entries + local docs plugin path
 ```
 
 ## Architecture Notes
@@ -172,6 +199,7 @@ Agents are invoked automatically by OpenCode based on task context, or you can r
 
 ```
 @explore find all configuration files in this project
+@swe implement a non-trivial feature with a durable workplan
 @docs-first-coder implement a React hook following current React docs
 @code-checker review the auth module
 @document-proofreader review report.md
