@@ -1,43 +1,65 @@
 ---
-name: workflow
-description: Use for non-trivial software engineering work, durable workplans, multi-step implementation, plan/execute/review loops, scoped delegation, or parallel code-writer lanes.
+name: workflow-execute
+description: Use after PLANNING has been completed, approved and a workplan exists. To execute an existing workplan through implementation, validation, and review. Do not load unless the user says "use workflows"
 compatibility: opencode
 metadata:
   domain: software-engineering
-  workflow: workplan
+  workflow: workplan-execution
 ---
 
-Role: Use this workflow when acting as the software engineering workspace orchestrator.
-
-When this workflow is active, keep ownership, plan state, implementation flow,
-validation, and review loops clean instead of doing every low-level edit yourself.
-
 # Goal
-Complete non-trivial software tasks through a controlled loop of structure discovery, planning, implementation, validation, and review.
 
-# Success criteria
-- the requested behavior is implemented correctly
-- multi-step work has a usable plan or work contract when needed
-- relevant validation has been run
-- review findings are either resolved or surfaced clearly
-- each delegated subtask has enough context to execute without guessing workspace root, scope, or validation target
+Execute an approved workplan through scoped implementation, validation, and
+review while keeping workplan state current.
 
-# Workflow
-- Start with `@explore` when project structure is still unclear.
-- Use the local `@plan` for durable planning loops. When the task needs design work before implementation, create or extend a spec markdown directly or use a dedicated architecture agent if one exists.
-- For non-trivial changes, create or adopt a persistent workplan with `workplan_*` before implementation starts when the user requested one or when you are taking over a non-trivial blueprint/spec handoff from `@plan`.
-- Use `workplan_inspect` before targeted phase or step updates, or when a handoff needs exact workplan ids.
-- In planning-only mode, you may still use `workplan_create`, `workplan_inspect`, `workplan_update`, `workplan_patch`, and `workplan_reset` to persist planning state even while code edits remain blocked.
-- Use `workplan_update` for structured JSON metadata changes: goal, scope, non-goals, constraints, relevant files, spec files, phases, steps, review findings, notes, status, and linked `planFile`.
-- Use `workplan_patch` for small localized edits to the linked Markdown plan when JSON metadata does not need structural changes. Keep `workplan_patch.patchText` minimal.
-- Never pass empty strings for optional `workplan_update` fields such as `planFile` or `planMarkdown`; omit unchanged optional fields. Avoid full `planMarkdown` for routine edits because tool inputs replay into future model context.
-- Validate the workplan first. If it passes, read the linked Markdown plan and any linked `specFiles`, then align execution to them before implementation begins.
-- Then run a parallelization assessment before the first `@code-writer` handoff.
-- Delegate focused implementation to `@code-writer` instead of doing large edits yourself.
-- When delegation is needed, give the subagent a strong execution contract rather than a loose summary.
-- Run the most relevant validation after each implementation pass.
-- Use `@code-checker` to review meaningful changes.
-- If review finds actionable issues, send a narrow fix brief back to `@code-writer` and loop.
+# Preconditions
+
+- PLANNING has been completed or the user explicitly accepts executing with a partial plan.
+- A workplan id or clear plan file is available, unless the task is trivial enough to skip durable planning.
+- The requested execution scope is clear enough to avoid guessing.
+
+# Execution methodology
+
+1. Read or adopt the workplan.
+2. Validate the workplan before changing implementation files.
+3. Read the linked Markdown plan and any linked `specFiles`.
+4. Identify the next executable phase/step and its file ownership boundaries.
+5. Decide whether work can be done directly or should be delegated to `@code-writer`.
+6. Run the narrowest useful validation after each implementation pass.
+7. Use `@code-checker` for meaningful changes.
+8. Record progress, validation, and review findings in the workplan.
+9. Loop only on concrete review findings; stop when validation passes and no blocker/critical/major findings remain.
+
+# Workplan tool subset for execution
+
+## Readiness and context
+
+- `workplan_read`: use at the start of execution to load full JSON metadata and linked Markdown plan detail.
+- `workplan_inspect`: use before targeted phase/step status updates, review-finding updates, or handoffs that need exact ids.
+- `workplan_validate`: use before implementation, after major workplan changes, and before declaring completion.
+
+## Execution state updates
+
+- `workplan_update`: use for machine-readable progress:
+  - mark phases/steps `in_progress`, `review`, `completed`, or `blocked`
+  - add relevant files discovered during execution
+  - append validation notes
+  - add review findings from `@code-checker`
+  - mark findings resolved after a fix pass
+- Omit unchanged optional fields. Never pass blank strings for `planFile`, `planMarkdown`, or other optional values.
+- Do not use full `planMarkdown` for routine progress updates.
+
+## Markdown execution notes
+
+- `workplan_patch`: use only for small localized updates to linked Markdown plan prose, such as completion notes, clarified acceptance criteria, or refined handoff detail.
+- Keep `patchText` minimal.
+- Do not use `workplan_patch` as a substitute for JSON status, findings, relevant files, or phase/step state.
+
+## Recovery and stale plans
+
+- `workplan_list`: use if the provided plan id is missing or ambiguous.
+- `workplan_reset`: use only when the user wants to restart a stale plan or regenerate Markdown from JSON metadata before execution.
+- `workplan_create`: normally not used in execution. If no workplan exists for non-trivial work, pause and create/validate one only if the user accepts that planning is incomplete.
 
 # Delegation contract
 
@@ -58,6 +80,7 @@ Every non-trivial handoff to `@code-writer` should include all of the following 
 - `inputs`: exact facts already established from the user, workplan, and local evidence
 - `validation`: precise commands or smoke checks to run for this pass
 - `deliverable`: what the child must return to the parent
+Tell it to "use workflows execute skill" so it loads the appropriate skill.
 
 Preferred handoff shape:
 
@@ -98,16 +121,12 @@ Do not send a child agent off with only the user prompt when the task depends on
 - After parallel lanes complete, reconcile their outputs in the parent, update the workplan once, then run the relevant validation and review loop.
 
 # Decision rules
+
 - Work directly only for very small changes where orchestration would be slower than execution.
 - Prefer one active workplan per non-trivial task.
-- For non-trivial work, create a workplan id early, keep it stable, and update it after each meaningful phase when you own the persistent handoff.
-- If no workplan exists yet, derive one from the task goal, scope, constraints, likely files, and planned phases.
 - If the user provides a workplan id, read that exact workplan from the current workspace root before doing anything else.
-- Always treat the current project directory as the default `workspaceRoot`; if a workplan read fails, verify the root and list existing workplans before assuming none exist.
-- Prefer `workplan_reset` when a stale or abandoned plan should be restarted instead of incrementally patched.
-- After changing global tools, agents, skills, or config, remind the user to restart opencode so the changes load.
-- After planning, validate the workplan first, then read the linked Markdown plan and any linked `specFiles`, then decide whether the execution can be parallelized safely before handing work to `@code-writer`.
-- Before delegation, read any applicable local `AGENTS.md` and include relevant local commands or conventions in the handoff when they materially affect execution.
+- Always treat the current project directory as the default `workspaceRoot`; if a workplan read fails, verify the root and list existing workplans before assuming none exists.
+- Before delegation, read applicable local `AGENTS.md` and include relevant local commands or conventions in the handoff when they materially affect execution.
 - Use a single `@code-writer` lane when dependency, file ownership, validation, or merge-order risk makes parallelism ambiguous; otherwise split into clear lanes.
 - After each implementation or review pass, update the workplan with status, relevant files, open findings, and next steps.
 - Mark review findings as open or resolved in the workplan instead of tracking them only in transient messages. When recording `@code-checker` severities, map `Critical -> critical`, `High -> major`, `Medium -> minor`, and `Low -> note` unless context warrants `blocker` or `question`.
@@ -115,13 +134,8 @@ Do not send a child agent off with only the user prompt when the task depends on
 - If test scope is unclear or risky, narrow the validation contract before handing work off instead of guessing broad coverage.
 - Stop the loop when validation passes and `@code-checker` has no unresolved blocker, critical, or major findings.
 
-# Workplan policy
-- Trivial tasks may stay in-message and skip persistent workplan creation.
-- For implementation work, create or adopt a persistent workplan when the user requested one, when you are taking over a non-trivial blueprint/spec handoff, or when execution needs durable multi-pass coordination.
-- The workplan should capture: goal, scope, non-goals, constraints, relevant files, the linked Markdown `planFile`, spec files when they exist, phases, validation, review findings, and current status.
-- When resuming work, list or read existing workplans first instead of creating duplicates.
-- Include the workplan id or path in major handoffs when it helps subagents stay aligned.
-
 # Stop rules
+
 - Do not run more than 3 implementation/review cycles without either converging or surfacing a blocker.
 - If the same issue repeats without progress, stop and explain the blocker.
+- After changing global tools, agents, skills, or config, remind the user to restart opencode so the changes load.
