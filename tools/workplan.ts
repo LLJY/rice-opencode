@@ -2,6 +2,7 @@ export {
   create,
   inspect,
   list,
+  patch,
   read,
   reset,
   update,

@@ -6,14 +6,26 @@ import { tmpdir } from "node:os";
 import { workplan_create } from "../../src/custom-tools/workplan/create";
 import { workplan_inspect } from "../../src/custom-tools/workplan/inspect";
 import { workplan_list } from "../../src/custom-tools/workplan/list";
+import { workplan_patch } from "../../src/custom-tools/workplan/patch";
 import { workplan_read } from "../../src/custom-tools/workplan/read";
 import { workplan_reset } from "../../src/custom-tools/workplan/reset";
 import { workplan_update } from "../../src/custom-tools/workplan/update";
 
-const toolContext = (directory: string, worktree = directory) => ({
+type TestAsk = {
+  permission: string;
+  patterns: string[];
+  always: string[];
+  metadata: Record<string, unknown>;
+};
+
+const toolContext = (directory: string, worktree = directory, asks: TestAsk[] = [], onAsk?: (input: TestAsk) => void | Promise<void>) => ({
   directory,
   worktree,
   metadata() {},
+  async ask(input: TestAsk) {
+    asks.push(input);
+    await onAsk?.(input);
+  },
 });
 
 describe("workplan tools", () => {
@@ -302,6 +314,259 @@ describe("workplan tools", () => {
           toolContext(workspace) as never,
         ),
       ).rejects.toThrow("Plan file must stay under .opencode/workplan/");
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("patches linked markdown while preserving json metadata and asking edit permission", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "workplan-tools-"));
+    const asks: TestAsk[] = [];
+
+    try {
+      mkdirSync(join(workspace, ".opencode"), { recursive: true });
+
+      await workplan_create.execute(
+        {
+          id: "demo-plan",
+          kind: "general",
+          goal: "Ship the new workplan flow",
+          status: "draft",
+          overwrite: false,
+        },
+        toolContext(workspace) as never,
+      );
+
+      const jsonPath = join(workspace, ".opencode", "workplan", "demo-plan.json");
+      const jsonBefore = readFileSync(jsonPath, "utf8");
+
+      await workplan_patch.execute(
+        {
+          id: "demo-plan",
+          patchText: [
+            "*** Begin Patch",
+            "*** Update File: .opencode/workplan/demo-plan.md",
+            "@@",
+            "-Ship the new workplan flow",
+            "+Ship the new workplan flow with a Markdown-only note",
+            "*** End Patch",
+          ].join("\n"),
+        },
+        toolContext(workspace, workspace, asks) as never,
+      );
+
+      const markdown = readFileSync(join(workspace, ".opencode", "workplan", "demo-plan.md"), "utf8");
+      expect(markdown).toContain("Ship the new workplan flow with a Markdown-only note");
+      expect(readFileSync(jsonPath, "utf8")).toBe(jsonBefore);
+      expect(asks.some((ask) => ask.permission === "edit" && ask.patterns.includes(".opencode/workplan/demo-plan.md"))).toBe(true);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("asks external-directory permission before reading an external workspaceRoot", async () => {
+    const callerWorkspace = mkdtempSync(join(tmpdir(), "workplan-tools-caller-"));
+    const externalWorkspace = mkdtempSync(join(tmpdir(), "workplan-tools-external-"));
+    const asks: TestAsk[] = [];
+
+    try {
+      await workplan_patch.execute(
+        {
+          workspaceRoot: externalWorkspace,
+          id: "demo-plan",
+          patchText: [
+            "*** Begin Patch",
+            "*** Update File: .opencode/workplan/demo-plan.md",
+            "@@",
+            "-Original external plan",
+            "+Patched external plan",
+            "*** End Patch",
+          ].join("\n"),
+        },
+        toolContext(callerWorkspace, callerWorkspace, asks, (input) => {
+          if (input.permission !== "external_directory") return;
+
+          mkdirSync(join(externalWorkspace, ".opencode", "workplan"), { recursive: true });
+          writeFileSync(
+            join(externalWorkspace, ".opencode", "workplan", "demo-plan.json"),
+            `${JSON.stringify(
+              {
+                schemaVersion: 2,
+                id: "demo-plan",
+                kind: "general",
+                title: null,
+                goal: "Patch an external workplan",
+                scope: [],
+                nonGoals: [],
+                constraints: [],
+                relevantFiles: [],
+                planFile: ".opencode/workplan/demo-plan.md",
+                specFiles: [],
+                phases: [],
+                reviewFindings: [],
+                notes: [],
+                status: "draft",
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+              },
+              null,
+              2,
+            )}\n`,
+            "utf8",
+          );
+          writeFileSync(join(externalWorkspace, ".opencode", "workplan", "demo-plan.md"), "Original external plan\n", "utf8");
+        }) as never,
+      );
+
+      expect(asks[0]?.permission).toBe("external_directory");
+      expect(asks[0]?.patterns).toEqual([`${externalWorkspace.replaceAll("\\", "/")}/**`]);
+      expect(asks.some((ask) => ask.permission === "edit" && ask.patterns.includes(`${externalWorkspace}/.opencode/workplan/demo-plan.md`))).toBe(true);
+      expect(readFileSync(join(externalWorkspace, ".opencode", "workplan", "demo-plan.md"), "utf8")).toBe("Patched external plan\n");
+    } finally {
+      rmSync(callerWorkspace, { recursive: true, force: true });
+      rmSync(externalWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects workplan patches for the wrong target path", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "workplan-tools-"));
+
+    try {
+      mkdirSync(join(workspace, ".opencode"), { recursive: true });
+
+      await workplan_create.execute(
+        {
+          id: "demo-plan",
+          kind: "general",
+          goal: "Ship the new workplan flow",
+          status: "draft",
+          overwrite: false,
+        },
+        toolContext(workspace) as never,
+      );
+
+      await expect(
+        workplan_patch.execute(
+          {
+            id: "demo-plan",
+            patchText: ["*** Begin Patch", "*** Update File: README.md", "@@", "-old", "+new", "*** End Patch"].join("\n"),
+          },
+          toolContext(workspace) as never,
+        ),
+      ).rejects.toThrow("Patch target must match linked planFile");
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects unsupported workplan patch operations", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "workplan-tools-"));
+
+    try {
+      mkdirSync(join(workspace, ".opencode"), { recursive: true });
+
+      await workplan_create.execute(
+        {
+          id: "demo-plan",
+          kind: "general",
+          goal: "Ship the new workplan flow",
+          status: "draft",
+          overwrite: false,
+        },
+        toolContext(workspace) as never,
+      );
+
+      const cases = [
+        { patchText: ["*** Begin Patch", "*** Add File: .opencode/workplan/other.md", "+hello", "*** End Patch"].join("\n"), error: "Add File" },
+        { patchText: ["*** Begin Patch", "*** Delete File: .opencode/workplan/demo-plan.md", "*** End Patch"].join("\n"), error: "Delete File" },
+        {
+          patchText: [
+            "*** Begin Patch",
+            "*** Update File: .opencode/workplan/demo-plan.md",
+            "*** Move to: .opencode/workplan/other.md",
+            "@@",
+            "-old",
+            "+new",
+            "*** End Patch",
+          ].join("\n"),
+          error: "Move to",
+        },
+        {
+          patchText: [
+            "*** Begin Patch",
+            "*** Update File: .opencode/workplan/demo-plan.md",
+            "@@",
+            "-Ship the new workplan flow",
+            "+Ship the new workplan flow once",
+            "*** Update File: .opencode/workplan/demo-plan.md",
+            "@@",
+            "-draft",
+            "+review",
+            "*** End Patch",
+          ].join("\n"),
+          error: "exactly one Update File",
+        },
+      ];
+
+      for (const testCase of cases) {
+        await expect(workplan_patch.execute({ id: "demo-plan", patchText: testCase.patchText }, toolContext(workspace) as never)).rejects.toThrow(
+          testCase.error,
+        );
+      }
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects no-op workplan patches and context mismatches", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "workplan-tools-"));
+
+    try {
+      mkdirSync(join(workspace, ".opencode"), { recursive: true });
+
+      await workplan_create.execute(
+        {
+          id: "demo-plan",
+          kind: "general",
+          goal: "Ship the new workplan flow",
+          status: "draft",
+          overwrite: false,
+        },
+        toolContext(workspace) as never,
+      );
+
+      await expect(
+        workplan_patch.execute(
+          {
+            id: "demo-plan",
+            patchText: [
+              "*** Begin Patch",
+              "*** Update File: .opencode/workplan/demo-plan.md",
+              "@@",
+              " Ship the new workplan flow",
+              "*** End Patch",
+            ].join("\n"),
+          },
+          toolContext(workspace) as never,
+        ),
+      ).rejects.toThrow("no additions or removals");
+
+      await expect(
+        workplan_patch.execute(
+          {
+            id: "demo-plan",
+            patchText: [
+              "*** Begin Patch",
+              "*** Update File: .opencode/workplan/demo-plan.md",
+              "@@",
+              "-This line is not in the plan",
+              "+This line cannot be applied",
+              "*** End Patch",
+            ].join("\n"),
+          },
+          toolContext(workspace) as never,
+        ),
+      ).rejects.toThrow("Failed to find expected lines");
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }

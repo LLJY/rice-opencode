@@ -27,7 +27,10 @@ Complete non-trivial software tasks through a controlled loop of structure disco
 - Use the local `@plan` for durable planning loops. When the task needs design work before implementation, create or extend a spec markdown directly or use a dedicated architecture agent if one exists.
 - For non-trivial changes, create or adopt a persistent workplan with `workplan_*` before implementation starts when the user requested one or when you are taking over a non-trivial blueprint/spec handoff from `@plan`.
 - Use `workplan_inspect` before targeted phase or step updates, or when a handoff needs exact workplan ids.
-- In planning-only mode, you may still use `workplan_create`, `workplan_inspect`, `workplan_update`, and `workplan_reset` to persist planning state even while code edits remain blocked.
+- In planning-only mode, you may still use `workplan_create`, `workplan_inspect`, `workplan_update`, `workplan_patch`, and `workplan_reset` to persist planning state even while code edits remain blocked.
+- Use `workplan_update` for structured JSON metadata changes: goal, scope, non-goals, constraints, relevant files, spec files, phases, steps, review findings, notes, status, and linked `planFile`.
+- Use `workplan_patch` for small localized edits to the linked Markdown plan when JSON metadata does not need structural changes. Keep `workplan_patch.patchText` minimal.
+- Never pass empty strings for optional `workplan_update` fields such as `planFile` or `planMarkdown`; omit unchanged optional fields. Avoid full `planMarkdown` for routine edits because tool inputs replay into future model context.
 - Validate the workplan first. If it passes, read the linked Markdown plan and any linked `specFiles`, then align execution to them before implementation begins.
 - Then run a parallelization assessment before the first `@code-writer` handoff.
 - Delegate focused implementation to `@code-writer` instead of doing large edits yourself.
@@ -102,6 +105,7 @@ Do not send a child agent off with only the user prompt when the task depends on
 - If the user provides a workplan id, read that exact workplan from the current workspace root before doing anything else.
 - Always treat the current project directory as the default `workspaceRoot`; if a workplan read fails, verify the root and list existing workplans before assuming none exist.
 - Prefer `workplan_reset` when a stale or abandoned plan should be restarted instead of incrementally patched.
+- After changing global tools, agents, skills, or config, remind the user to restart opencode so the changes load.
 - After planning, validate the workplan first, then read the linked Markdown plan and any linked `specFiles`, then decide whether the execution can be parallelized safely before handing work to `@code-writer`.
 - Before delegation, read any applicable local `AGENTS.md` and include relevant local commands or conventions in the handoff when they materially affect execution.
 - Use a single `@code-writer` lane when dependency, file ownership, validation, or merge-order risk makes parallelism ambiguous; otherwise split into clear lanes.
