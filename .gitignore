@@ -29,3 +29,5 @@ research/
 .env
 .env.*
 .exa-api-key
+.github-pat
+.context7-api-key

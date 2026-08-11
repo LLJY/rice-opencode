@@ -1,5 +1,5 @@
 ---
-description: Code verification specialist. Three-pillar analysis: smells, spec alignment, correctness.
+description: "Code verification specialist. Three-pillar analysis: smells, spec alignment, correctness."
 mode: subagent
 model: openai/gpt-5.6-sol
 variant: xhigh

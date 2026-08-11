@@ -1,19 +1,38 @@
 {
-  "name": "rice-opencode",
+  "name": "@rice-opencode/plugin",
   "version": "1.0.0",
-  "description": "OpenCode config preset and plugin workspace",
-  "private": true,
+  "description": "One-stop OpenCode harness with agents, commands, skills, workplan tools, and MCP integrations",
   "type": "module",
+  "main": "./src/plugin/index.ts",
+  "module": "./src/plugin/index.ts",
+  "types": "./src/plugin/index.ts",
+  "exports": {
+    ".": "./src/plugin/index.ts",
+    "./server": "./src/plugin/index.ts"
+  },
+  "files": [
+    "agents",
+    "commands",
+    "skills",
+    "assets",
+    "src/plugin",
+    "src/custom-tools",
+    "README.md",
+    "credentials/README.md"
+  ],
   "workspaces": [
-    "packages/plugin",
     "packages/viz",
     "packages/shared"
   ],
   "scripts": {
-    "build": "bun run --cwd packages/plugin build",
+    "build": "bun build ./src/plugin/index.ts --outdir ./dist --target bun --format esm --external @opencode-ai/plugin",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "pack:check": "bun run --cwd packages/plugin pack:check"
+    "pack:check": "bun run scripts/verify-packed.ts",
+    "prepack": "bun run build"
+  },
+  "engines": {
+    "opencode": ">=1.18.11"
   },
   "dependencies": {
     "@opencode-ai/plugin": "1.14.48"
@@ -21,5 +40,6 @@
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.3.0"
-  }
+  },
+  "license": "UNLICENSED"
 }

@@ -1,87 +1,33 @@
 # rice-opencode
 
-Personal OpenCode configuration preset with optional experimental packages.
+`rice-opencode` is Lucas's one-package OpenCode harness. The repository root is directly installable as `@rice-opencode/plugin`; [`README.md`](README.md) is the installation and compatibility source of truth.
 
-## What is this?
+## Stable runtime surface
 
-This repository contains my OpenCode-AI configuration, including:
+The package registers:
 
-- **Custom agents** - Specialized AI agent prompts for different tasks
-- **Templates** - Reusable LaTeX templates for IEEE papers and SIT/UofG reports
-- **MCP server configs** - GitHub, Context7, DeepWiki, Exa search, Hound fetch, DDG fallback
+- active Markdown agents from `agents/`
+- the `/review` command from `commands/`
+- skill discovery from `skills/`
+- eight workplan tools from `src/custom-tools/workplan*`
+- seven MCP integrations from `src/plugin/mcp.ts`
 
-## Structure
+`src/plugin/index.ts` is the package entrypoint. `opencode.json` loads that entrypoint directly for repository development.
 
-```
-├── agents/           # Agent prompt files
-├── commands/         # Slash commands
-├── skills/           # Skills
-├── packages/viz/     # Experimental viz plugin package (not loaded by default)
-├── pandoc/
-│   ├── assets/       # Logo images (SIT, UofG)
-│   └── templates/    # LaTeX templates
-└── opencode.json     # Main OpenCode config preset
-```
+## Repository resources
 
-## Architecture Notes
+- `pandoc/` retains reusable document templates and logos.
+- `packages/viz` and `packages/shared` remain private experimental workspaces and are not shipped in the stable plugin package.
+- Deprecated agents remain as source material only when marked `disable: true`; the package loader excludes them.
 
-The stable surface is the config/preset layer: `agents`, `commands`, `skills`,
-and `opencode.json`.
+## Credentials
 
-The legacy `packages/docs` plugin and `docs-workflow` skill were removed in
-favor of Quarto. Their useful templates and logos remain under the root
-`pandoc/` directory.
+GitHub, Context7, and Exa credentials are read from mode-`0600` files under `~/.config/opencode/`. They are not committed, passed in MCP command-line arguments, or sourced from the old root environment-variable preset. See [`credentials/README.md`](credentials/README.md).
 
-### Experimental package
+## MCP installation model
 
-`packages/viz` exists for future chart/diagram/table generation ideas.
+Local MCPs use pinned `npx`, `uvx`, or Docker invocations so their runtimes download into normal user caches on first launch. The Go Researcher MCP is bundled as a verified Linux x86-64 binary. DeepWiki is remote-only.
 
-It is currently:
+## Compaction
 
-- private
-- not loaded by default
-- not part of the stable user-facing path
-
-`packages/viz` and `packages/shared` remain optional package-level work and are
-not part of the stable default harness.
-
-## Agents
-
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| plan | GPT-5.5 | Requirements analysis and execution planning |
-| chat | GPT-5.5 | General interactive agent |
-| build | GPT-5.5 | High-agency implementation and verification |
-| explore | GPT-5.5 | Fast codebase navigation and file discovery |
-| docs-first-coder | GPT-5.5 | Documentation-verified coding |
-| code-checker | GPT-5.5 | Code review and verification |
-| document-proofreader | GPT-5.5 | Academic proofreading and argument review |
-
-## Document Templates
-
-Quarto supersedes the removed custom docs plugin. The repository retains IEEE
-and SIT/UofG LaTeX templates plus logos under `pandoc/` for reuse with Quarto,
-Pandoc, or direct LaTeX workflows.
-
-## Setup
-
-1. Copy to `~/.config/opencode/` or use as project-local config
-2. Create local secret files:
-   ```
-   GITHUB_PAT=your_github_pat
-   CONTEXT7_API_KEY=your_context7_key
-   ```
-   Save the raw Exa API key without a trailing newline in `~/.config/opencode/.exa-api-key`, then run `chmod 600 ~/.config/opencode/.exa-api-key`.
-3. Install dependencies: `bun install` or `npm install`
-4. Prewarm the pinned Hound tool: `uvx --from 'hound-mcp[all]==12.4.1' hound -v`
-5. Run `uvx --from 'hound-mcp[all]==12.4.1' hound --doctor`, then install Chromium only if the doctor reports it missing
-6. Verify Exa and Hound with `opencode mcp list`; Exa uses the `x-api-key` header and has OAuth disabled
-
-## Notes
-
-- `opencode.json` uses `{env:VAR}` and `{file:path}` substitutions for secrets - safe to commit
-- open-web search routes to `exa_web_search_exa`; known-URL retrieval routes to `hound_smart_fetch`
-- Hound's duplicate `hound_smart_search` tool is disabled
-- `researcher-mcp` still expects a shell-script launcher path for now
-- Actual API keys should be in `.env` or `~/.config/opencode/.exa-api-key`, outside tracked config
-- Quarto is preferred for document authoring; retained templates require LaTeX for PDF output
+Rice does not export a compaction agent or `experimental.session.compacting` hook. Current OpenCode V2 compaction continuity belongs in OpenCode core, not this preset.
