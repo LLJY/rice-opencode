@@ -237,6 +237,13 @@ Stable section-local IDs (`HIER-2`, `HPK-4`). Supporting bullets/examples inheri
 
 **VERIFY-2 — Checks.** Orientation; hierarchy/squint; colour/grayscale; HPK; data relationships; targets; semantics/focus/keyboard/zoom/status; states/recovery; localization; reduction; competition; consistency.
 
+## Anti-slop bar (OMO frontend port)
+
+**SLOP-1 — Banned defaults.** No generic font stacks (Inter/Roboto/Arial/plain system), no predictable centered-hero-card template layouts, no purple-on-white gradients, no emoji as icons, no animating layout properties (width/height/top/left/margin).
+**SLOP-2 — Icons.** Inline SVG with distinct silhouettes and accessible names; never emoji icons (extends ICON-1–ICON-4).
+**SLOP-3 — Motion compositing.** Animate transform/opacity only (GPU-composited); layout-property animation is a defect. Respect reduced motion (A11Y-9).
+**SLOP-4 — Contract gate.** When the repo has DESIGN.md, its tokens/typography/motion decisions gate visual choices; conflicts resolve per AUTH-1 precedence.
+
 **OUTPUT-1 — Completion gate.** Do not finish until requested artifact is delivered, mode loop complete, and evidence supports recognition, action, recovery. Put blockers, unresolved defects, and unverified claims in final evidence table.
 
 ## Mandatory final evidence

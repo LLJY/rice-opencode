@@ -28,6 +28,13 @@ Use this skill when the user asks to create, prepare, review, or phrase a Git co
 2. If the user is committing directly on `main` or `master`, warn them if it appears to be a shared branch.
 3. Do not impede the user if their intention is to commit on that branch anyway.
 
+## Atomic grouping (OMO git-master port)
+
+- Group by behavior + module + revertability: one commit = one reason to revert.
+- Default: 3+ touched files with distinct behaviors -> 2+ commits; single-behavior changes stay one commit.
+- Detect style from recent history (last ~30 commits: types, scopes, body usage) before drafting; repo history wins over defaults.
+- These rules extend the branching rules above and never override them: no new branches, warn on shared `main`, never block explicit user intent.
+
 ## Staging discipline
 
 - Review `git status`, staged/unstaged diff, and recent commit style before committing.

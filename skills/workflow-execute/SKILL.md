@@ -1,145 +1,45 @@
 ---
 name: workflow-execute
-description: Use after PLANNING has been completed, approved and a workplan exists. To execute an existing workplan through implementation, validation, and review. Do not load unless the user says "use workflows"
-compatibility: opencode
+description: Execute a ready development workplan through scoped implementation, evidence-backed validation and independent review. Used for authorized implementation, including /dev; honor plan-only requests.
 metadata:
+  compatibility: opencode
   domain: software-engineering
   workflow: workplan-execution
 ---
 
-# Goal
-
-Execute an approved workplan through scoped implementation, validation, and
-review while keeping workplan state current.
-
 # Preconditions
 
-- PLANNING has been completed or the user explicitly accepts executing with a partial plan.
-- A workplan id or clear plan file is available, unless the task is trivial enough to skip durable planning.
-- The requested execution scope is clear enough to avoid guessing.
-- If the plan is well specified, continue autonomously until completion; do not stop unless validation, safety, scope, dependency, or a user-decision issue blocks progress.
-- If the plan hits a material snag or would require scope creep, ask the user instead of deciding unilaterally.
-- Be religious about updating the workplan, as the harness may undergo context compaction and lose critical detail.
+Read the exact plan from the actual project root, including JSON state, linked Markdown and specFiles. Confirm readiness and the user's existing implementation authorization. An implementation request or `/dev` authorizes ordinary in-scope work; a plan-only request does not. Do not request a redundant approval between ready steps.
 
-# Execution methodology
-0. If the plan has not already been vetted by `plan-checker`, do so immediately.
-0a. Ensure the plan passes codebase reality checks with `plan-checker`; apply recommended changes autonomously unless they introduce material scope creep, architecture changes, dependency changes, or user-facing tradeoffs.
-1. Read or adopt the workplan.
-2. Validate the workplan before changing implementation files (if not already done so).
-3. Read the linked Markdown plan and any linked `specFiles`.
-4. Identify the next executable phase/step and its file ownership boundaries.
-5. Decide whether work can be done directly or should be delegated to `@code-writer` (parallel as planned or as necessary).
-6. If there are critical cross-dependencies overlooked by the plan, you may run `code-writer` in serial (one by one) instead.
-7. Run the narrowest useful validation after small changes. For large/potentially consequential changes, run `@code-checker` adversarial review. Use code-checker for slice-wide audits. If changes are small, wait until the end of a larger slice before code-checker.
-8. Record progress, validation, and review findings in the workplan.
-9. Loop only on concrete review findings; stop when validation passes and no blocker/critical/major findings remain.
+If a non-trivial task has no plan, use `workflow-plan` first under the same implementation authorization. The planner returns the plan; build retains execution ownership. For small clear changes, skip durable planning.
 
-# Workplan tool subset for execution
+Read [the artifact and evidence contract](../workflow-plan/references/workplan-contract.md) for state, receipts and the three gates. If workplan tools are unavailable, use native read/edit tools on the same artifacts. Never stall in a retry loop over nonexistent or stale tools.
 
-## Readiness and context
+If the artifact contract cannot be read, report that blocker rather than guessing field names or accepting an unknown schema. Numeric `schemaVersion: 2` and the documented field types/statuses are required for the native-file fallback. Use the live session's canonical project root, not a filesystem alias that resolves outside it.
 
-- `workplan_read`: use at the start of execution to load full JSON metadata and linked Markdown plan detail.
-- `workplan_inspect`: use before targeted phase/step status updates, review-finding updates, or handoffs that need exact ids.
-- `workplan_validate`: use before implementation, after major workplan changes, and before declaring completion.
+For this global harness, when `workplan_validate` is absent, build can run the read-only structural check with `bun ~/.config/opencode/scripts/check-workplan.ts <absolute-workspace-root> <workplan-id>` after the planner returns. It checks the existing schema and linked files without installing anything. A nonzero exit blocks structural validity. If Bun or this helper is unavailable, disclose that limitation and validate with native reads against the artifact contract; do not claim the command ran. Planner and reviewer agents have shell disabled and return their artifacts/findings to build for this check.
 
-## Execution state updates
+# Execution loop
 
-- `workplan_update`: use for machine-readable progress:
-  - mark phases/steps `in_progress`, `review`, `completed`, or `blocked`
-  - add relevant files discovered during execution
-  - append validation notes
-  - add review findings from `@code-checker`
-  - mark findings resolved after a fix pass
-- Omit unchanged optional fields. Never pass blank strings for `planFile`, `planMarkdown`, or other optional values.
-- If a frontend/tool schema displays blank optional placeholders anyway, treat them as omitted. Do not retry the same failing `workplan_update` call in a loop; use `workplan_patch` for Markdown-only changes, `workplan_reset` for explicit draft resets, or stop and report that the loaded workplan tool is stale.
-- Do not use full `planMarkdown` for routine progress updates.
+1. Check structural validity and codebase readiness. If a substantial plan has not been vetted by `plan-checker`, request that review. Apply recommended corrections autonomously unless they introduce material scope creep, architecture changes, dependency changes, or user-facing tradeoffs; surface those decisions.
+2. Read exact phase/step IDs before updates. Identify the next executable package, prerequisites, owned files, blocked/shared files, integration order and validation target. Recheck stale references when the code changed.
+3. Load `agent-use`. Delegate bounded engineering to `code-writer` or `frontend-engineer`, retaining Sol for decisions and integration. Work directly for a small task or when one coherent reasoning context is needed. Delegate only independent meaningful slices with disjoint ownership. Serialize shared-file work.
+4. Require the worker to run relevant self-checks and return the standard receipt. The parent reconciles outputs, inspects the diff and updates shared state once. Workers do not edit the shared workplan.
+5. Use `tester` for additional specified checks, bug reproduction or collecting high-volume test evidence when that saves work. Reuse already valid checks for the same code state instead of automatically running them again. A tester reports failures; the implementer fixes them.
+6. For medium/large or consequential changes, obtain a fresh `code-checker` review with exact scope, acceptance criteria, current diff and evidence. Use code-checker for slice-wide audits; for small changes, wait until the end of a larger slice before review. Reviewers do not repair the implementation. Track findings durably and return concrete corrections to the appropriate worker.
+7. After each meaningful pass, record code state, worker/session id, attempts, changed files, acceptance evidence, validation commands/results, findings and next step. Update the JSON statuses and Markdown detail with localized edits.
+8. Continue the next ready package without generic permission questions. Stop when the completion gate passes or a concrete blocker/decision requires input.
 
-## Markdown execution notes
+# State updates
 
-- `workplan_patch`: use only for small localized updates to linked Markdown plan prose, such as completion notes, clarified acceptance criteria, or refined handoff detail.
-- Keep `patchText` minimal.
-- Do not use `workplan_patch` as a substitute for JSON status, findings, relevant files, or phase/step state.
+Prefer one active workplan per task. Use `workplan_read`/`inspect` before targeted updates when available. `workplan_update` owns JSON fields; `workplan_patch` owns localized Markdown prose. Omit unchanged optional fields and never send empty placeholder strings or full planMarkdown for routine updates. If tools are absent, edit the same version-2 JSON and Markdown directly; preserve ids, markers and unrelated state.
 
-## Recovery and stale plans
+Record review severities as `blocker`, `critical`, `major`, `minor`, `note`, `question`; map legacy Critical -> critical, High -> major, Medium -> minor, Low -> note. Mark resolved findings explicitly. Do not confuse structural `valid` with verified completion. Preserve failed attempt history and the current resume point across compaction.
 
-- `workplan_list`: use if the provided plan id is missing or ambiguous.
-- `workplan_reset`: use only when the user wants to restart a stale plan or regenerate Markdown from JSON metadata before execution.
-- `workplan_create`: normally not used in execution. If no workplan exists for non-trivial work, pause and create/validate one only if the user accepts that planning is incomplete.
+# Convergence and acceptance
 
-# Delegation contract
+After two failed substantive fixes, reassess the hypothesis with Sol; consult oracle for contradictory evidence or exceptional uncertainty. Resume the worker for a specific correction when native continuation is available. Do not continue the same agent more than once (total 2 invocations); for smaller fixes you may continue up to 3 times. Stop after three non-converging implementation/review cycles and report remaining evidence and the decision needed. Do not repeat an unchanged failing approach or broaden scope to appease speculative review suggestions.
 
-Every non-trivial handoff to `@code-writer` should include all of the following unless a field is genuinely unknown:
+Before marking completed, check the original user outcome, current acceptance evidence, required validation, integration across slices, and absence of unresolved blocker/critical/major findings. An independently reviewed significant change may pass with non-blocking notes. If required verification is unavailable, report that limitation; never invent a passing check.
 
-- `workspaceRoot`: absolute workspace root path
-- `cwd`: absolute working directory for the task when different from the workspace root
-- `workplanId`: persistent workplan id when one exists
-- `workplanPath`: absolute path to the JSON metadata when it helps avoid workspace-root mistakes
-- `planFile`: absolute path to the Markdown execution plan when one exists
-- `phaseId` and `stepId`: exact workplan phase/step to execute when applicable
-- `specFiles`: architecture/specification files the child must follow for this pass
-- `laneId`, `ownedFiles`, `blockedFiles`, `laneDependencies`, and `mergeOrder`: when parallel child lanes are used
-- `goal`: one sentence describing the user-visible outcome for this pass
-- `scope`: the exact files, routes, components, or systems allowed to change
-- `nonGoals`: what must stay unchanged in this pass
-- `constraints`: user constraints, dependency approvals, route stability requirements, or runtime constraints
-- `inputs`: exact facts already established from the user, workplan, and local evidence
-- `validation`: precise commands or smoke checks to run for this pass
-- `deliverable`: what the child must return to the parent
-
-Preferred handoff shape:
-
-```text
-Implementation contract
-- workspaceRoot: /abs/path
-- cwd: /abs/path
-- workplanId: example-workplan
-- workplanPath: /abs/path/.opencode/workplan/example-workplan.json
-- planFile: /abs/path/.opencode/workplan/example-workplan.md
-- phaseId: phase-x
-- stepId: step-x-y
-- specFiles: docs/specs/README.md, docs/specs/features/x.md
-- laneId: lane-a
-- ownedFiles: A and B only
-- blockedFiles: C is owned by lane-b
-- laneDependencies: wait for phase-y only if noted
-- mergeOrder: lane-a then lane-b
-- goal: Implement X without breaking Y.
-- scope: Edit only A, B, and C.
-- nonGoals: Do not change D or E.
-- constraints: Keep route structure stable; approved deps are X and Y only.
-- inputs: Existing workplan already exists; local AGENTS.md applies; current routes are ...
-- validation: run cmd-1; smoke check route-1 and route-2
-- deliverable: summary, files changed, validation results, blocker if any
-```
-
-Do not send a child agent off with only the user prompt when the task depends on workspace-specific state or an existing workplan.
-
-# Parallelization policy
-
-- Run a parallelization assessment by default after workplan validation.
-- Parallelize only when tracks are independent, scopes are disjoint, and merge order is obvious.
-- Good parallel examples: discovery in one lane while another lane reviews docs; route A and route B when they touch separate files; implementation in one lane and test planning in another.
-- Bad parallel examples: two writers editing the same file set, two lanes deriving the same architecture, or any split that would require the child agents to guess ownership boundaries.
-- Define candidate lanes, owned files, blocked/shared files, dependencies, merge order, and validation targets before launching parallel child work.
-- If using parallel child work, define each lane's file ownership and validation target explicitly.
-- After parallel lanes complete, reconcile their outputs in the parent, update the workplan once, then run the relevant validation and review loop.
-
-# Decision rules
-
-- Work directly only for very small changes where orchestration would be slower than execution.
-- Prefer one active workplan per non-trivial task.
-- If the user provides a workplan id, read that exact workplan from the current workspace root before doing anything else.
-- Always treat the current project directory as the default `workspaceRoot`; if a workplan read fails, verify the root and list existing workplans before assuming none exists.
-- Before delegation, read applicable local `AGENTS.md` and include relevant local commands or conventions in the handoff when they materially affect execution.
-- Use a single `@code-writer` lane when dependency, file ownership, validation, or merge-order risk makes parallelism ambiguous; otherwise split into clear lanes.
-- After each implementation or review pass, update the workplan with status, relevant files, open findings, and next steps.
-- Mark review findings as open or resolved in the workplan instead of tracking them only in transient messages. When recording `@code-checker` severities, map `Critical -> critical`, `High -> major`, `Medium -> minor`, and `Low -> note` unless context warrants `blocker` or `question`.
-- Keep fix loops narrow and evidence-based.
-- If test scope is unclear or risky, narrow the validation contract before handing work off instead of guessing broad coverage.
-- Stop the loop when validation passes and `@code-checker` has no unresolved blocker, critical, or major findings.
-
-# Stop rules
-
-- Do not run more than 3 implementation/review cycles without either converging or surfacing a blocker.
-- Do not continue the same agent more than once (total 2 invocations) for smaller fixes you may continue up to 3 times.
-- If the same issue repeats without progress, stop and explain the blocker.
+Finish with behavior delivered, relevant files, checks/evidence and remaining limitations. After global harness changes, explain whether a new session or service restart is needed to load them; do not interrupt unrelated running work automatically.

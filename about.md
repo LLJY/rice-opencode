@@ -1,14 +1,15 @@
 # rice-opencode
 
-Personal OpenCode configuration preset with optional experimental packages.
+Personal OpenCode configuration preset and separate plugin packages.
 
 ## What is this?
 
 This repository contains my OpenCode-AI configuration, including:
 
 - **Custom agents** - Specialized AI agent prompts for different tasks
-- **Templates** - Reusable LaTeX templates for IEEE papers and SIT/UofG reports
-- **MCP server configs** - GitHub, Context7, DeepWiki, Exa search, Hound fetch, DDG fallback
+- **Document generation plugin package** - Plugin-v2-compliant Pandoc-based docs tools under `packages/docs`
+- **Templates** - LaTeX templates for IEEE papers, school reports (SIT/UofG)
+- **MCP server configs** - GitHub, Context7, DeepWiki, gofetch (search + fetch), researcher-mcp; remote Exa entry kept but disabled
 
 ## Structure
 
@@ -16,21 +17,31 @@ This repository contains my OpenCode-AI configuration, including:
 ├── agents/           # Agent prompt files
 ├── commands/         # Slash commands
 ├── skills/           # Skills
+├── packages/docs/    # Main docs plugin package
 ├── packages/viz/     # Experimental viz plugin package (not loaded by default)
 ├── pandoc/
 │   ├── assets/       # Logo images (SIT, UofG)
 │   └── templates/    # LaTeX templates
-└── opencode.json     # Main OpenCode config preset
+└── opencode.json     # Main OpenCode config preset + local plugin path
 ```
 
 ## Architecture Notes
 
-The stable surface is the config/preset layer: `agents`, `commands`, `skills`,
-and `opencode.json`.
+This repo is no longer just "one plugin".
 
-The legacy `packages/docs` plugin and `docs-workflow` skill were removed in
-favor of Quarto. Their useful templates and logos remain under the root
-`pandoc/` directory.
+It is split into:
+
+- a **config/preset layer** (`agents`, `commands`, `skills`, `opencode.json`)
+- a **plugin package layer** (`packages/docs`, `packages/viz`, `packages/shared`)
+
+### Stable package
+
+`packages/docs` is the main stable package.
+
+- package name: `@rice-opencode/docs`
+- plugin-v2 server entrypoint: `packages/docs/src/server.ts`
+- implementation: `packages/docs/src/plugin.ts`
+- bundled templates/assets live under `packages/docs/pandoc/`
 
 ### Experimental package
 
@@ -42,26 +53,51 @@ It is currently:
 - not loaded by default
 - not part of the stable user-facing path
 
-`packages/viz` and `packages/shared` remain optional package-level work and are
-not part of the stable default harness.
+### Intent
+
+The current architecture is aiming for:
+
+- one clean, publishable docs plugin package
+- one local OpenCode preset that can load that package
+- room for a future all-in-one harness later, without forcing unfinished features into the default setup
 
 ## Agents
 
 | Agent | Model | Purpose |
-|-------|-------|---------|
-| plan | GPT-5.5 | Requirements analysis and execution planning |
-| chat | GPT-5.5 | General interactive agent |
-| build | GPT-5.5 | High-agency implementation and verification |
-| explore | GPT-5.5 | Fast codebase navigation and file discovery |
-| docs-first-coder | GPT-5.5 | Documentation-verified coding |
-| code-checker | GPT-5.5 | Code review and verification |
-| document-proofreader | GPT-5.5 | Academic proofreading and argument review |
+| --- | --- | --- |
+| build | Sol Medium | Development routing, delegation, integration, and acceptance |
+| plan | Sol High | Requirements analysis and durable execution planning |
+| explore | Luna High | Fast codebase navigation and file discovery |
+| researcher | Terra High | External documentation and literature synthesis |
+| plan-checker | Sol High | Workplan and handoff verification |
+| code-writer | Terra Medium | Scoped documentation-first implementation |
+| frontend-engineer | Terra High | Frontend implementation and experience design |
+| tester | Luna Medium | Validation and reproduction without repairs |
+| code-checker | Sol High | Independent code review and verification |
+| oracle | Sol XHigh | Exceptional architecture and debugging advice |
+| document-writer | Terra Medium | Technical and academic document authorship |
+| document-proofreader | Terra High | Academic proofreading and argument review |
 
-## Document Templates
+## Document Plugin
 
-Quarto supersedes the removed custom docs plugin. The repository retains IEEE
-and SIT/UofG LaTeX templates plus logos under `pandoc/` for reuse with Quarto,
-Pandoc, or direct LaTeX workflows.
+The main docs package is `@rice-opencode/docs` with a plugin-v2 server entrypoint at `packages/docs/src/server.ts`.
+
+Its tool implementation provides:
+
+- `docs_convert` - Basic format conversion via pandoc
+- `docs_create_styled_pdf` - Professional PDFs with Eisvogel template
+- `docs_create_ieee_paper` - IEEE two-column conference papers
+- `docs_templates_list` - List installed templates
+- `docs_templates_install` - Install templates (eisvogel, ieee) and CSL styles
+- `docs_presets_list` / `docs_presets_show` - Manage document presets
+- `docs_create` - Universal document creation with preset support
+
+### Presets
+
+- `school-report` - SIT/UofG reports with logo support (`--logo sit|uofg|both`)
+- `ieee-conference` - IEEE two-column conference papers
+- `ieee-journal` - IEEE journal format
+- `eisvogel` - General professional documents
 
 ## Setup
 
@@ -73,15 +109,15 @@ Pandoc, or direct LaTeX workflows.
    ```
    Save the raw Exa API key without a trailing newline in `~/.config/opencode/.exa-api-key`, then run `chmod 600 ~/.config/opencode/.exa-api-key`.
 3. Install dependencies: `bun install` or `npm install`
-4. Prewarm the pinned Hound tool: `uvx --from 'hound-mcp[all]==12.4.1' hound -v`
-5. Run `uvx --from 'hound-mcp[all]==12.4.1' hound --doctor`, then install Chromium only if the doctor reports it missing
-6. Verify Exa and Hound with `opencode mcp list`; Exa uses the `x-api-key` header and has OAuth disabled
+4. Build the gofetch binary: `git submodule update --init mcps/gofetch-mcp && make -C mcps/gofetch-mcp build`
+5. Verify gofetch with `opencode mcp list`; the remote Exa entry stays disabled — gofetch reads `.exa-api-key` directly
 
 ## Notes
 
 - `opencode.json` uses `{env:VAR}` and `{file:path}` substitutions for secrets - safe to commit
-- open-web search routes to `exa_web_search_exa`; known-URL retrieval routes to `hound_smart_fetch`
-- Hound's duplicate `hound_smart_search` tool is disabled
+- open-web search routes to `gofetch_web_search`; known-URL retrieval routes to `gofetch_fetch`
+- the remote Exa MCP entry is disabled; gofetch uses the Exa API when a key is present, with keyless DuckDuckGo/Mojeek fallback
+- the docs plugin is loaded locally from `./packages/docs`
 - `researcher-mcp` still expects a shell-script launcher path for now
 - Actual API keys should be in `.env` or `~/.config/opencode/.exa-api-key`, outside tracked config
-- Quarto is preferred for document authoring; retained templates require LaTeX for PDF output
+- Templates require LaTeX installation (texlive-full recommended)

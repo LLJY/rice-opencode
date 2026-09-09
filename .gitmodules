@@ -1,0 +1,6 @@
+[submodule "mcps/researcher-mcp"]
+	path = mcps/researcher-mcp
+	url = git@github.com:hoshinoht/researcher-mcp.git
+[submodule "mcps/gofetch-mcp"]
+	path = mcps/gofetch-mcp
+	url = https://github.com/hoshinoht/gofetch-mcp.git

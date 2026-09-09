@@ -1,100 +1,37 @@
 ---
 name: workflow-plan
-description: Use during PLAN mode to create, revise, validate, and hand off durable workplans using workplan_* tools. Do not load unless the user says "use workflows"
-compatibility: opencode
+description: Create or revise a durable development plan when uncertainty, interacting components or multi-pass coordination warrants it. Used by plan and by the /dev development flow; planning never authorizes implementation by itself.
 metadata:
+  compatibility: opencode
   domain: software-engineering
   workflow: workplan-planning
 ---
 
-# Goal
+# Planning procedure
 
-Turn a non-trivial software request into an execution-ready workplan with JSON
-metadata and linked Markdown detail, without implementing production code.
+1. Read the user's goal, applicable project instructions, existing changes, and relevant implementation/tests. Look for an existing matching plan before creating another. Use the actual project root, not a child cwd or this global configuration directory.
+2. Separate facts discoverable in the repository from decisions only the user can make. Explore until the current question is answered; stop after two research waves add no useful evidence. Follow established conventions for routine reversible details and record assumptions. Ask about surviving material scope/product/architecture tradeoffs. Child planners return questions to their parent.
+3. For a small, clear task, a concise in-message plan is enough. For non-trivial work, adopt one stable plan id and use the storage contract below. Record the existing authorization: plan-only, implementation requested, or a specific pending decision. A status field does not create approval.
+4. Design coherent work packages with objective, owned files, dependencies, approach, acceptance criteria, validation and risks. Implementation plus its relevant tests belongs in one package. Plan parallel work only where file ownership and dependencies are clear. Do not prescribe a worker count or split cohesive reasoning into tiny tasks.
+5. Verify references against current files. Use `plan-checker` on substantial plans; load `agent-use` before delegation. Apply evidence-backed corrections autonomously unless they introduce material scope creep, architecture changes, dependency changes, or user-facing tradeoffs. Keep those decisions with the user/parent.
+6. Re-review only accepted blockers, introduced regressions and new evidenced material defects. Notes do not prevent readiness. Cap review at three cycles, then return the specific unresolved blocker or decision. A missing reviewer is a disclosed limitation, not a fabricated approval.
+7. Return an execution-ready handoff or exact blockers. Do not implement or launch implementation workers in the planner. The parent build agent may continue an already authorized implementation request after the handoff; a direct plan-only request ends here.
 
-# PLAN mode boundary
+# Durable storage
 
-- In PLAN mode, do not implement application changes. Only use the workplan tools to edit plans.
-- Use workplan tools to persist plan state instead of relying on chat memory.
-- Direct edits should be limited to planning artifacts only when a workplan tool cannot express the change.
-- End with a concrete handoff the user can approve or pass to an execution agent.
+Keep `.opencode/workplan/<id>.json` for machine state and `.opencode/workplan/<id>.md` for detailed reasoning, ownership, acceptance and evidence. Optional specifications live under `.opencode/docs/specs/` and are linked via `specFiles`. Read [the artifact contract](references/workplan-contract.md) when creating, resuming or validating a durable plan.
 
-# Planning methodology
+Use `workplan_list`, `read` and `inspect` for discovery. If these tools are actually available, use `create`, `update`, `patch` and `validate` for maintenance. Never assume a tool exists merely because it appears in this skill. If absent in V2, use native read/edit tools and the same documented file format; preserve existing ids and fields. This fallback stays inside the planner's allowed artifact paths and requires no shell execution or plugin installation.
 
-1. Re-read the user's request and constraints.
-2. Inspect the workspace enough to identify relevant files, entry points, tests, configs, and risks.
-3. Check for existing workplans before creating a new one.
-4. Create or adopt one stable workplan id.
-5. Capture structured state in JSON and detailed rationale/handoff prose in Markdown.
-6. Ask and continuously go back and forth with the user on action items and clarifications that materially affect scope, architecture, safety, or validation.
-7. DO NOT continue with an under-specified plan unless the user explicitly accepts the remaining uncertainty. Keep the user in the loop at every material step. Default to comprehensive planning.
-8. When writing the plan, consider execution boundaries with parallel subagents. Identify areas that are parallelizable and areas with serial or cross-dependency constraints. The workflow should be massively parallel where possible, but take incredible care with cross dependencies and do not plan useless tiny tasks; subagents are capable engineers on their own.
-9. The workflow plan should contain this execution workflow as specified: Slice A (parallel where necessary) `code-writer` -> `code-checker` (check entire slice, or sub-slices if too large) -> `code-writer` (Slice B) -> `code-checker` (Slice B), and so on until the task is completed.
-10. Validate the workplan, using the tool AND the `plan-checker` agent.
-11. If validation or `plan-checker` review finds issues, revise and revalidate.
-12. Return a short handoff: workplan id, readiness, open questions, and execution command/agent suggestion.
+Before a fallback write, read `references/workplan-contract.md` relative to this skill's base directory. If that reference cannot be read, return BLOCKED with the error; do not infer a schema from logs, old conversations or another project's plan. New metadata must use numeric `schemaVersion: 2`, the documented field types and status enum. Re-read both artifacts and compare against that reference before claiming structural validity. Use the live session's canonical project directory for paths (on macOS `/tmp` may resolve to `/private/tmp`).
 
-DO NOT load the workflow-execute skill unless planning has been completed. It's out of scope for planning.
+When tools are available:
+- `workplan_update` changes JSON state: goal, scope, constraints, files, phases/steps, findings, notes and status. Prefer targeted `updatePhases`, `updateSteps`, `addPhases`, `addSteps`.
+- Omit unchanged optional values. Never send blank strings or placeholder arrays to clear data. Do not retry a stale-schema error unchanged.
+- `workplan_patch` changes localized Markdown prose only. Do not replace the whole plan on every update or use Markdown to silently change machine state.
+- Use reset only for a requested restart; never reset a valid plan on resume.
+- `workplan_validate` checks structure and linked files. Its `valid` result does not prove executability, authorization, or completion.
 
-# Workplan tool subset for planning
+# Handoff
 
-## Discovery and adoption
-
-- `workplan_list`: use first when resuming, when the user names a project vaguely, or when a related plan may already exist.
-- `workplan_read`: use when adopting an existing plan or when you need the full Markdown plus JSON metadata.
-- `workplan_inspect`: use when you only need phase ids, step ids, statuses, files, or review findings for a targeted update.
-
-## Creating durable plan state
-
-- `workplan_create`: use when no matching plan exists and the task is non-trivial.
-- Include `goal`, `scope`, `nonGoals`, `constraints`, `relevantFiles`, `specFiles` when known, phases, steps, validation, and `planFile`.
-- Use stable readable ids. Do not create multiple plans for the same user request.
-- Initial `planMarkdown` is acceptable for a fresh plan, but avoid sending large Markdown through future routine updates.
-
-## Updating JSON metadata
-
-- `workplan_update`: use for structured state:
-  - title, goal, status
-  - scope, non-goals, constraints
-  - relevant files and spec files
-  - phases and steps
-  - review findings
-  - notes
-  - linked `planFile`
-- Omit fields that should not change.
-- Never pass blank strings for optional fields such as `planFile` or `planMarkdown`.
-- If a frontend/tool schema displays blank optional placeholders anyway, treat them as omitted. Do not retry the same failing `workplan_update` call in a loop; use `workplan_patch` for Markdown-only changes, `workplan_reset` for explicit draft resets, or stop and report that the loaded workplan tool is stale.
-- Prefer targeted `updatePhases`, `updateSteps`, `addPhases`, and `addSteps` over replacing the whole phase list when only one item changed.
-
-## Updating Markdown prose
-
-- `workplan_patch`: use for small localized edits to the linked Markdown plan.
-- Use it for wording, rationale, sequencing detail, acceptance criteria, and handoff prose when JSON metadata does not need to change.
-- Keep `patchText` minimal and target only the linked `.opencode/workplan/<id>.md` file.
-- Do not use `workplan_patch` to change machine state such as phase status, step status, findings, scope, constraints, relevant files, or spec files. Those belong in `workplan_update`.
-
-## Resetting and validating
-
-- `workplan_reset`: use when a stale plan should restart from draft, or when Markdown should be regenerated from JSON metadata.
-- `workplan_validate`: use after creating a plan, after major revisions, and before telling the user the plan is execution-ready.
-- If validation fails, fix the plan or surface the blocker; do not hand off an invalid plan as ready.
-
-# Planning handoff shape
-
-When the plan is ready, respond with:
-
-```text
-Planning complete
-<detailed brief summary of the plan>
-- workplanId: <id>
-- planFile: <path>
-- status: ready | blocked | needs decision
-- open questions: <none or exact questions>
-- next step: use workflow-execute after PLANNING has been approved
-```
-
-# Stop rules
-
-- Stop and ask the user when a scope, architecture, dependency, migration, or safety decision blocks planning. use the question tool to do so.
-- Do not spin on more than 3 plan/review iterations without surfacing the blocker.
-- If the user explicitly asks to execute, first state whether the workplan is valid and ready.
+Return STATUS: READY | BLOCKED with a detailed brief summary of the plan, workspace root, workplan id, JSON and Markdown paths, scope, decisions/assumptions, work packages and ownership, acceptance/validation, plan-review coverage and remaining findings. READY is a handoff verdict, not a new JSON status enum. Include whether implementation was already requested or whether the user asked for a plan only. Do not ask for another generic approval when the parent already has implementation authorization.

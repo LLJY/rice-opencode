@@ -1,0 +1,21 @@
+{
+  "name": "@rice-opencode/token-saver",
+  "version": "1.0.0",
+  "description": "V2-only OpenCode plugin: token metering, output slimming, and pruning with independent toggles",
+  "license": "GPL-2.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/hoshinoht/opencode-config.git",
+    "directory": "packages/token-saver"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "test": "bun test src/"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "0.0.0-beta-19157"
+  }
+}

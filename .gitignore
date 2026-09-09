@@ -28,4 +28,15 @@ research/
 # Secrets
 .env
 .env.*
+
+# opencode's dependency-install marker — do not delete, and do not run
+# `bun install` here; opencode installs config-dir deps itself (npm-style)
+# and crashes at startup if it finds a bun-layout node_modules.
+package-lock.json
 .exa-api-key
+antigravity-accounts.json
+antigravity-accounts.json.*.tmp
+antigravity-signature-cache.json
+antigravity-logs/
+opencode-notifier-state.json
+service.json

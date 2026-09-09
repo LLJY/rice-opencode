@@ -1,0 +1,21 @@
+{
+  "name": "@rice-opencode/quota-fallback",
+  "version": "1.0.0",
+  "description": "V2-only OpenCode plugin: configurable quota-triggered model failover with circuit breaker",
+  "license": "GPL-2.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/hoshinoht/rice-opencode.git",
+    "directory": "packages/quota-fallback"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "test": "bun test src/"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "0.0.0-beta-19157"
+  }
+}

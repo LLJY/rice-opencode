@@ -1,0 +1,21 @@
+{
+  "name": "@rice-opencode/openai-long-context",
+  "version": "1.0.0",
+  "description": "V2-only OpenCode plugin: 1M-context variants for OpenAI gpt-5.6 models",
+  "license": "GPL-2.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/hoshinoht/rice-opencode.git",
+    "directory": "packages/openai-long-context"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "test": "bun test src/"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "0.0.0-beta-19157"
+  }
+}

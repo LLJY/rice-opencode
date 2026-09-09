@@ -1,0 +1,382 @@
+%% SIT-UofG Report Template
+%% Single-column layout with adjustable margins and logo support
+
+\documentclass[$if(fontsize)$$fontsize$$else$12pt$endif$,$if(papersize)$$papersize$paper$else$a4paper$endif$$for(classoption)$,$classoption$$endfor$]{article}
+
+% Page geometry with adjustable margins
+\usepackage{geometry}
+$if(margin)$
+\geometry{margin=$margin$}
+$else$
+\geometry{%
+  top=$if(top-margin)$$top-margin$$else$2.5cm$endif$,%
+  bottom=$if(bottom-margin)$$bottom-margin$$else$2.5cm$endif$,%
+  left=$if(left-margin)$$left-margin$$else$2.5cm$endif$,%
+  right=$if(right-margin)$$right-margin$$else$2.5cm$endif$%
+}
+$endif$
+
+% Essential packages
+\usepackage{graphicx}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc}
+\usepackage{etoolbox}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{amssymb}  % For checkbox squares and math symbols
+
+$if(fontfamily)$
+\usepackage[$for(fontfamilyoptions)$$fontfamilyoptions$$sep$,$endfor$]{$fontfamily$}
+$else$
+\usepackage{lmodern}
+$endif$
+
+$if(linestretch)$
+\usepackage{setspace}
+\setstretch{$linestretch$}
+$endif$
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[$if(fontenc)$$fontenc$$else$T1$endif$]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp}
+\else
+  \usepackage{fontspec}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+
+% Hyperref setup
+\hypersetup{
+$if(colorlinks)$
+  colorlinks=true,
+  linkcolor=$if(linkcolor)$$linkcolor$$else$blue$endif$,
+  filecolor=$if(filecolor)$$filecolor$$else$blue$endif$,
+  citecolor=$if(citecolor)$$citecolor$$else$blue$endif$,
+  urlcolor=$if(urlcolor)$$urlcolor$$else$blue$endif$,
+$else$
+  hidelinks,
+$endif$
+  pdfcreator={LaTeX via pandoc with SIT-UofG template}}
+
+% CSL citations
+$if(csl-refs)$
+\NewDocumentCommand\citeproctext{}{}
+\NewDocumentCommand\citeproc{mm}{%
+  \begingroup\def\citeproctext{#2}\cite{#1}\endgroup}
+\makeatletter
+\let\@cite@ofmt\@firstofone
+\def\@biblabel#1{}
+\def\@cite#1#2{{#1\if@tempswa , #2\fi}}
+\makeatother
+\newlength{\cslhangindent}
+\setlength{\cslhangindent}{1.5em}
+\newlength{\csllabelwidth}
+\setlength{\csllabelwidth}{3em}
+\newenvironment{CSLReferences}[2]
+ {\begin{list}{}{%
+  \setlength{\itemindent}{0pt}
+  \setlength{\leftmargin}{0pt}
+  \setlength{\parsep}{0pt}
+  \ifodd #1
+   \setlength{\leftmargin}{\cslhangindent}
+   \setlength{\itemindent}{-1\cslhangindent}
+  \fi
+  \ifnum #2 > 0
+   \setlength{\leftmargin}{\csllabelwidth}
+   \setlength{\labelsep}{0.5em}
+   \setlength{\labelwidth}{\csllabelwidth}
+  \fi}}
+ {\end{list}}
+\usepackage{calc}
+\newcommand{\CSLBlock}[1]{\hfill\break\parbox[t]{\linewidth}{\strut\ignorespaces#1\strut}}
+\newcommand{\CSLLeftMargin}[1]{\parbox[t]{\csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLRightInline}[1]{\parbox[t]{\linewidth - \csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
+$endif$
+
+% Code listings
+$if(listings)$
+\usepackage{listings}
+\newcommand{\passthrough}[1]{#1}
+\lstset{
+  basicstyle=\footnotesize\ttfamily,
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=4,
+  frame=single,
+  frameround=tttt,
+  showstringspaces=false
+}
+$endif$
+
+% Passthrough for inline code (needed even without listings)
+\providecommand{\passthrough}[1]{#1}
+
+$if(highlighting-macros)$
+$highlighting-macros$
+
+% Redefine Highlighting environment with fvextra for line breaks
+\usepackage{fvextra}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+$endif$
+
+% Tables
+\usepackage{multirow}
+\usepackage{colortbl}  % For rowcolor in tables
+$if(tables)$
+\usepackage{longtable,booktabs,array}
+$if(multirow)$
+\usepackage{multirow}
+$endif$
+\usepackage{calc}
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+\IfFileExists{footnote.sty}{\usepackage{footnote}\makesavenoteenv{longtable}}{}
+$endif$
+
+% Graphics
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+
+% Pandoc 3.x bounded images support
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+\makeatother
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+
+% Section numbering
+$if(numbersections)$
+\setcounter{secnumdepth}{$if(secnumdepth)$$secnumdepth$$else$5$endif$}
+$else$
+\setcounter{secnumdepth}{-\maxdimen}
+$endif$
+
+% Header/Footer
+\pagestyle{fancy}
+\fancyhf{}
+$if(header-left)$
+\fancyhead[L]{$header-left$}
+$endif$
+$if(header-center)$
+\fancyhead[C]{$header-center$}
+$endif$
+$if(header-right)$
+\fancyhead[R]{$header-right$}
+$endif$
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{$if(header-rule)$$header-rule$$else$0pt$endif$}
+
+% Tight list
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% Custom commands for logo positioning
+\newcommand{\sitlogo}[1]{%
+  \noindent
+  \includegraphics[height=3.6cm]{#1}%
+  \vspace{1cm}%
+}
+
+\newcommand{\uofglogo}[1]{%
+  \noindent
+  \includegraphics[height=2.2cm]{#1}%
+  \vspace{1cm}%
+}
+
+\newcommand{\duallogos}[2]{%
+  \noindent
+  \begin{minipage}[t]{0.45\textwidth}
+    \raggedright
+    \includegraphics[height=3.6cm]{#1}
+  \end{minipage}%
+  \hfill%
+  \begin{minipage}[t]{0.45\textwidth}
+    \raggedleft
+    \raisebox{0.5cm}{\includegraphics[height=2.2cm]{#2}}
+  \end{minipage}%
+  \vspace{1cm}%
+}
+
+\begin{document}
+
+% Title Page
+$if(titlepage)$
+\begin{titlepage}
+\thispagestyle{empty}
+
+% Logo section
+$if(logo-mode)$
+$if(sit-logo)$
+$if(uofg-logo)$
+% Both logos mode
+\duallogos{$sit-logo$}{$uofg-logo$}
+$else$
+% SIT only
+\sitlogo{$sit-logo$}
+$endif$
+$else$
+$if(uofg-logo)$
+% UofG only
+\uofglogo{$uofg-logo$}
+$endif$
+$endif$
+$else$
+% Default: check for individual logo variables
+$if(logo)$
+\singlelogo{$logo$}
+$endif$
+$endif$
+
+\vspace{1cm}
+
+% Title section (centered)
+\begin{center}
+$if(title)$
+{\Large \textbf{$title$}}
+\vspace{0.5cm}
+$endif$
+
+$if(version)$
+Version: $version$
+\vspace{0.5cm}
+$endif$
+
+$if(date)$
+Date: $date$
+\vspace{0.5cm}
+$endif$
+
+$if(project-topic-id)$
+Project Topic ID: $project-topic-id$
+\vspace{0.5cm}
+$endif$
+\end{center}
+
+\vspace{1cm}
+
+% Authors table (adapts based on provided IDs)
+$if(authors)$
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+
+% Check which ID fields are present across all authors
+\newif\ifhassitid
+\newif\ifhasglasgowid
+$for(authors)$
+$if(authors.sit-id)$\hassitidtrue$endif$
+$if(authors.glasgow-id)$\hasglasgowidtrue$endif$
+$endfor$
+
+% Determine table format based on which IDs are present
+\ifhasglasgowid
+% Glasgow ID present: 3 columns
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Student name} & \textbf{SIT Student ID} & \textbf{Glasgow Student ID} \\
+\hline
+$for(authors)$
+$authors.name$ & $if(authors.sit-id)$$authors.sit-id$$else$-$endif$ & $authors.glasgow-id$ \\
+\hline
+$endfor$
+\end{tabular}
+\else
+\ifhassitid
+% Only SIT ID: 2 columns
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Student name} & \textbf{SIT Student ID} \\
+\hline
+$for(authors)$
+$authors.name$ & $authors.sit-id$ \\
+\hline
+$endfor$
+\end{tabular}
+\else
+% No IDs: 1 column
+\begin{tabular}{|l|}
+\hline
+\textbf{Student name} \\
+\hline
+$for(authors)$
+$authors.name$ \\
+\hline
+$endfor$
+\end{tabular}
+\fi
+\fi
+
+\end{center}
+$else$
+$if(author)$
+\vspace{2cm}
+\begin{center}
+{\large $author$}
+$if(date)$
+$else$
+\vspace{0.5cm}
+$endif$
+\end{center}
+$endif$
+$endif$
+
+\vfill
+
+\end{titlepage}
+$endif$
+
+% Table of contents
+$if(toc)$
+$if(toc-title)$
+\renewcommand*\contentsname{$toc-title$}
+$endif$
+\tableofcontents
+$if(toc-own-page)$
+\newpage
+$endif$
+$endif$
+
+% List of figures
+$if(lof)$
+\listoffigures
+$endif$
+
+% List of tables
+$if(lot)$
+\listoftables
+$endif$
+
+% Main content
+$body$
+
+% Bibliography
+$if(natbib)$
+$if(bibliography)$
+\bibliography{$for(bibliography)$$bibliography$$sep$,$endfor$}
+$endif$
+$endif$
+
+$if(biblatex)$
+\printbibliography$if(biblio-title)$[title=$biblio-title$]$endif$
+$endif$
+
+$for(include-after)$
+$include-after$
+$endfor$
+
+\end{document}
