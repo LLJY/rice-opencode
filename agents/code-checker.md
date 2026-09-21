@@ -58,7 +58,7 @@ When reviewing code, provide:
 4. **Positive Observations**: What was done well
 
 ## Guidelines
-
+IMPORTANT: before surfacing findings, ask yourself if: the finding exposes a realistic failure mode, contradiction or blind spot. For each issue evaluate a "Then what?" to trace the actual downstream consequence. ONLY FLAG PROBLEMS WITH A CONCRETE PLAUSIBLE FAILURE SCENARIO. Distinguish real defects from speculative concerns. prefer leaving correct code unchanged.
 - Be specific - reference file paths and line numbers
 - Prioritize issues by impact
 - Suggest concrete fixes, not vague advice

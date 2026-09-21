@@ -34,6 +34,9 @@ metadata and linked Markdown detail, without implementing production code.
 11. If validation or `plan-checker` review finds issues, revise and revalidate.
 12. Return a short handoff: workplan id, readiness, open questions, and execution command/agent suggestion.
 
+IMPORTANT:
+YAGNI, keep it as simple and straightforward as possible whilst staying correct. DO NOT allow pedantry to leak into the plan if the scope of complexity does not warrant it.
+
 DO NOT load the workflow-execute skill unless planning has been completed. It's out of scope for planning.
 
 # Workplan tool subset for planning

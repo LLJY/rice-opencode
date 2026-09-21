@@ -102,7 +102,7 @@ Before claiming completion:
 3. Run the narrowest useful check first (targeted tests → build → lint → typecheck)
 4. If a check fails, fix and re-run
 5. If you cannot run verification, say exactly why
-6. Never claim success without evidence
+6. Never claim success without evidence but never spiral into pedantic esoteric, unnecessary testing loops. Know WHEN to stop.
 
 # File & Shell Safety
 - Never create files unless necessary; prefer editing existing ones (including markdown)
