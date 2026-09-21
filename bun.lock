@@ -12,6 +12,16 @@
         "typescript": "^5.3.0",
       },
     },
+    "packages/plugin": {
+      "name": "@rice-opencode/plugin",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@opencode-ai/plugin": "1.14.48",
+      },
+      "peerDependencies": {
+        "@opencode-ai/plugin": ">=1.14.48",
+      },
+    },
     "packages/shared": {
       "name": "@rice-opencode/shared",
       "version": "1.0.0",
@@ -40,6 +50,8 @@
     "@opencode-ai/plugin": ["@opencode-ai/plugin@1.14.48", "", { "dependencies": { "@opencode-ai/sdk": "1.14.48", "effect": "4.0.0-beta.59", "zod": "4.1.8" }, "peerDependencies": { "@opentui/core": ">=0.2.6", "@opentui/keymap": ">=0.2.6", "@opentui/solid": ">=0.2.6" }, "optionalPeers": ["@opentui/core", "@opentui/keymap", "@opentui/solid"] }, "sha512-pb2ywByzn4i35WWJquEYyb8lDC/ph1PLXT+heucJN6Y9U/oeSw98JQV93IG7M6BUBks6MKD3DGDJdQfyD6x0rA=="],
 
     "@opencode-ai/sdk": ["@opencode-ai/sdk@1.14.48", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-wKM86jCzV/ZApyWrdm3uP8XdWcS0LMbu3FV+OWz1ChiGGg1wiIWNGMJs5CY8/QX2/rUuZrd1Q1DqvdamZ0zLeg=="],
+
+    "@rice-opencode/plugin": ["@rice-opencode/plugin@workspace:packages/plugin"],
 
     "@rice-opencode/shared": ["@rice-opencode/shared@workspace:packages/shared"],
 

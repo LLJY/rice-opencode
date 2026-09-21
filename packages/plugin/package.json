@@ -1,0 +1,40 @@
+{
+  "name": "@rice-opencode/plugin",
+  "version": "0.1.0",
+  "description": "Batteries-included OpenCode workflow plugin with durable workplans, workflow skills, and compaction continuity",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun run ./scripts/build.ts",
+    "test": "bun test src/plugin.test.ts",
+    "typecheck": "tsc --noEmit -p ../../tsconfig.json",
+    "pack:check": "bun run ./scripts/verify-packed.ts"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "workflow",
+    "workplan",
+    "agent-skills"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LLJY/rice-opencode.git",
+    "directory": "packages/plugin"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.14.48"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.14.48"
+  }
+}

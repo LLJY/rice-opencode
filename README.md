@@ -23,6 +23,10 @@ This repository contains a fully-featured OpenCode configuration preset plus opt
 | `code-checker` | GPT-5.5 | Code review, smells detection, and verification |
 | `document-proofreader` | GPT-5.5 | Academic proofreading and argument review |
 
+### Batteries-included workflow plugin
+
+`packages/plugin` packages the durable workflow layer as a proper OpenCode plugin. A single plugin install provides all eight workplan tools, the `workflow-plan` and `workflow-execute` skills, and additive compaction continuity for active workplans. See [`packages/plugin/README.md`](packages/plugin/README.md).
+
 ### SWE Workplan Baseline
 
 This repo now includes a software-engineering baseline with durable workplan tools and agent prompts for structured multi-step execution.
@@ -77,7 +81,8 @@ for Quarto or direct Pandoc/LaTeX workflows.
 │       └── workplan/       # Workplan tool implementation
 ├── tests/
 │   └── workplan/           # Focused workplan tool tests
-├── packages/               # Optional TypeScript package/plugin code
+├── packages/               # Installable and experimental plugin packages
+│   ├── plugin/             # Batteries-included workflow plugin
 │   ├── shared/
 │   └── viz/
 ├── pandoc/                 # LaTeX templates and assets

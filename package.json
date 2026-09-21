@@ -5,11 +5,15 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "packages/plugin",
     "packages/viz",
     "packages/shared"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "build": "bun run --cwd packages/plugin build",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "pack:check": "bun run --cwd packages/plugin pack:check"
   },
   "dependencies": {
     "@opencode-ai/plugin": "1.14.48"
