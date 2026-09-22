@@ -1,8 +1,8 @@
 ---
 description: Academic proofreader. Reviews documents for evidence, argument quality, and style without editing files.
 mode: subagent
-model: openai/gpt-5.5
-variant: high
+model: openai/gpt-6-sol
+variant: xhigh
 permission:
   read: allow
   glob: allow

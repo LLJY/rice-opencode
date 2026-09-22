@@ -3,8 +3,8 @@ description: |
   Software-engineering planning agent for durable Markdown workplans,
   open-question loops, and plan-checker review before execution begins.
 mode: primary
-model: openai/gpt-5.6-sol
-variant: max
+model: openai/gpt-6-astra
+variant: high
 permission:
   read: allow
   glob: allow
