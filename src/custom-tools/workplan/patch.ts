@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { relative, resolve } from "node:path";
 
-import { tool } from "@opencode-ai/plugin";
+import { tool, type ToolContext } from "../tool";
 
 import {
   assertSafePathAccess,
@@ -24,11 +24,6 @@ type PatchHunk = {
 type RestrictedPatch = {
   target: string;
   hunks: PatchHunk[];
-};
-
-type AskContext = {
-  worktree: string;
-  ask(input: AskInput): unknown;
 };
 
 type AskInput = { permission: string; patterns: string[]; always: string[]; metadata: Record<string, unknown> };
@@ -229,7 +224,7 @@ function trimOuterBlankLines(lines: string[]): string[] {
   return lines.slice(start, end + 1);
 }
 
-async function askExternalWorkspaceIfNeeded(context: AskContext, workspaceRoot: string): Promise<void> {
+async function askExternalWorkspaceIfNeeded(context: ToolContext, workspaceRoot: string): Promise<void> {
   if (isWithinWorkspaceRoot(context.worktree, workspaceRoot)) return;
 
   await runAsk(context, {
@@ -243,7 +238,7 @@ async function askExternalWorkspaceIfNeeded(context: AskContext, workspaceRoot: 
   });
 }
 
-async function runAsk(context: AskContext, input: AskInput): Promise<void> {
+async function runAsk(context: ToolContext, input: AskInput): Promise<void> {
   await context.ask(input);
 }
 

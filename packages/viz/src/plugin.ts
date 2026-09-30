@@ -1,7 +1,8 @@
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, type Stats } from "fs";
 import { homedir } from "os";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "path";
-import { type Plugin, tool } from "@opencode-ai/plugin";
+
+import { tool } from "../../../src/custom-tools/tool";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:2455/v1";
 const DEFAULT_MODEL = "gpt-5.5";
@@ -61,6 +62,7 @@ interface ImageGenerationCall {
 
 interface GenerateImageDependencies {
   env?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
   fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
   sleep?: (ms: number) => Promise<void>;
   beforeFinalWrite?: () => void;
@@ -688,8 +690,17 @@ function readOpenAIProviderConfig(env: NodeJS.ProcessEnv, workspaceRoot?: string
             };
           };
         };
+        providers?: {
+          openai?: {
+            settings?: {
+              apiKey?: unknown;
+              baseURL?: unknown;
+              baseUrl?: unknown;
+            };
+          };
+        };
       };
-      const options = parsed.provider?.openai?.options;
+      const options = parsed.providers?.openai?.settings ?? parsed.provider?.openai?.options;
       const apiKey = options && Object.prototype.hasOwnProperty.call(options, "apiKey")
         ? resolveConfigString(options.apiKey, env, configSource.path)
         : undefined;
@@ -997,9 +1008,11 @@ async function createImageResponse(
 
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     try {
+      throwIfAborted(deps.signal);
       const response = await fetchImpl(url, {
         method: "POST",
         headers: buildHeaders(config.apiKey),
+        signal: deps.signal,
         body: JSON.stringify({
           model: config.model,
           input: prompt,
@@ -1018,8 +1031,9 @@ async function createImageResponse(
 
       const responseText = await response.text();
 
+      let parsed: ResponsesApiResponse;
       try {
-        return JSON.parse(responseText) as ResponsesApiResponse;
+        parsed = JSON.parse(responseText) as ResponsesApiResponse;
       } catch {
         if (isTransientFailure(response.status, responseText)) {
           if (attempt < RETRY_DELAYS_MS.length) {
@@ -1032,6 +1046,9 @@ async function createImageResponse(
 
         throw new Error("Image generation response was not valid JSON.");
       }
+
+      throwIfAborted(deps.signal);
+      return parsed;
     } catch (error) {
       if (attempt < RETRY_DELAYS_MS.length && isTransientFailure(undefined, undefined, error)) {
         await sleep(RETRY_DELAYS_MS[attempt]);
@@ -1042,6 +1059,11 @@ async function createImageResponse(
   }
 
   throw new Error("Image generation failed after retries.");
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
 }
 
 function getImageGenerationCall(response: ResponsesApiResponse): ImageGenerationCall {
@@ -1114,6 +1136,7 @@ export async function generateImage(
     const imageCall = getImageGenerationCall(response);
     const imageBytes = decodeBase64Image(imageCall.result);
     assertPng(imageBytes);
+    throwIfAborted(deps.signal);
 
     writeImageFileSafely(boundOutput, imageBytes, args.overwrite, deps.beforeFinalWrite, deps.afterFinalWrite, deps.writeFileImpl, deps.closeFileImpl);
 
@@ -1129,20 +1152,14 @@ export async function generateImage(
   }
 }
 
-export const VizPlugin: Plugin = async (ctx) => {
-  return {
-    tool: {
-      viz_generate_image: tool({
-        description: "Generate a PNG image from a prompt and save it in the current worktree.",
-        args: {
-          prompt: tool.schema.string().describe("Image prompt"),
-          output_path: tool.schema.string().describe("PNG output path within the current worktree"),
-          overwrite: tool.schema.boolean().optional().describe("Overwrite an existing PNG file when true"),
-        },
-        async execute(args) {
-          return JSON.stringify(await generateImage(ctx, args), null, 2);
-        },
-      }),
-    },
-  };
-};
+export const viz_generate_image = tool({
+  description: "Generate a PNG image from a prompt and save it in the current worktree.",
+  args: {
+    prompt: tool.schema.string().describe("Image prompt"),
+    output_path: tool.schema.string().describe("PNG output path within the current worktree"),
+    overwrite: tool.schema.boolean().optional().describe("Overwrite an existing PNG file when true"),
+  },
+  async execute(args, context) {
+    return JSON.stringify(await generateImage(context, args, { signal: context.abort }), null, 2);
+  },
+});

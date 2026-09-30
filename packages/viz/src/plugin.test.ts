@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { closeSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir, tmpdir } from "os";
-import { generateImage, resolveVizConfig, VizPlugin } from "./plugin";
+import { generateImage, resolveVizConfig, viz_generate_image } from "./plugin";
 
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02, 0x03]);
 const PNG_BASE64 = PNG_BYTES.toString("base64");
@@ -81,6 +81,38 @@ describe("generateImage", () => {
 
     expect(config.baseUrl).toBe("http://env-base/v1");
     expect(config.apiKey).toBe("env-key");
+  });
+
+  it("prefers native V2 provider settings and resolves their placeholders", () => {
+    const config = resolveVizConfig({
+      LOCAL_OPENAI_API_KEY: "native-key",
+      LOCAL_OPENAI_BASE_URL: "http://127.0.0.1:2455/v1/",
+      VIZ_OPENCODE_CONFIG_CONTENT: JSON.stringify({
+        provider: { openai: { options: { apiKey: "legacy-key" } } },
+        providers: {
+          openai: {
+            settings: {
+              apiKey: "{env:LOCAL_OPENAI_API_KEY}",
+              baseURL: "{env:LOCAL_OPENAI_BASE_URL}",
+            },
+          },
+        },
+      }),
+    });
+
+    expect(config.apiKey).toBe("native-key");
+    expect(config.baseUrl).toBe("http://127.0.0.1:2455/v1");
+  });
+
+  it("allows native V2 settings to clear a legacy API key", () => {
+    const config = resolveVizConfig({
+      VIZ_OPENCODE_CONFIG_CONTENT: JSON.stringify({
+        provider: { openai: { options: { apiKey: "legacy-key" } } },
+        providers: { openai: { settings: { apiKey: null } } },
+      }),
+    });
+
+    expect(config.apiKey).toBeUndefined();
   });
 
   it("lets empty VIZ api key clear generic OPENAI api key", () => {
@@ -667,13 +699,12 @@ describe("generateImage", () => {
     }
   });
 
-  it("exposes only the prompt-first image generation tool", async () => {
-    const { ctx, worktree } = makeCtx();
-    createdWorktrees.push(worktree);
-
-    const plugin = await VizPlugin(ctx as never);
-
-    expect(Object.keys(plugin.tool ?? {}).sort()).toEqual(["viz_generate_image"]);
+  it("exposes the image tool schema with required prompt and output path", () => {
+    expect(viz_generate_image.schema.parse({ prompt: "cat", output_path: "cat.png" })).toEqual({
+      prompt: "cat",
+      output_path: "cat.png",
+    });
+    expect(() => viz_generate_image.schema.parse({ prompt: "cat" })).toThrow();
   });
 
   it("rejects output paths outside the worktree", async () => {

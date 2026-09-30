@@ -1,10 +1,12 @@
 # rice-opencode
 
-Personal [OpenCode](https://opencode.ai) configuration — a complete AI-assisted development environment with specialized agents and MCP servers.
+[OpenCode V2](https://opencode.ai/v2/) plug-and-play preset — tools, skills, agents, and `/review` in one plugin.
 
 ## Overview
 
-This repository contains a fully-featured OpenCode configuration preset plus optional experimental packages. It provides specialized AI agents, integrated MCP server config, and reusable document templates.
+`packages/plugin` is the distributable V2-only bundle. Install one plugin entry
+into an existing OpenCode setup; do not copy our JSON config. The repository also
+retains personal config examples and document templates, which are not packaged.
 
 ## Features
 
@@ -12,20 +14,23 @@ This repository contains a fully-featured OpenCode configuration preset plus opt
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| `plan` | GPT-5.5 | Requirements analysis and execution planning |
-| `swe` | GPT-5.5 | Software engineering orchestrator for multi-step code work |
-| `chat` | GPT-5.5 | General interactive agent |
-| `build` | GPT-5.5 | High-agency implementation and verification |
-| `explore` | GPT-5.5 | Fast codebase navigation and file discovery |
-| `researcher` | GPT-5.4 | Literature-review research with optional read-only codebase context |
-| `plan-checker` | GPT-5.5 | Workplan, spec, handoff, and workflow risk review |
-| `code-writer` | GPT-5.5 | Documentation-first focused implementation subagent for scoped plan steps |
-| `code-checker` | GPT-5.5 | Code review, smells detection, and verification |
-| `document-proofreader` | GPT-5.5 | Academic proofreading and argument review |
+| `plan` | `openai/gpt-6-astra#high` | Requirements analysis and execution planning |
+| `swe` | Host-selected | Software engineering orchestrator for multi-step code work |
+| `chat` | `openai/gpt-5.5#high` | General interactive agent |
+| `build` | `openai/gpt-6-astra#high` | High-agency implementation and verification |
+| `explore` | `openai/gpt-6-luna#high` | Fast codebase navigation and file discovery |
+| `researcher` | `openai/gpt-6-sol#xhigh` | Literature-review research with optional read-only codebase context |
+| `plan-checker` | `openai/gpt-6-sol#xhigh` | Workplan, spec, handoff, and workflow risk review |
+| `code-writer` | `openai/gpt-6-luna#max` | Documentation-first focused implementation subagent for scoped plan steps |
+| `code-checker` | `openai/gpt-6-sol#xhigh` | Code review, smells detection, and verification |
+| `document-proofreader` | `openai/gpt-6-sol#xhigh` | Academic proofreading and argument review |
 
 ### Batteries-included workflow plugin
 
-`packages/plugin` packages the durable workflow layer as a proper OpenCode plugin. A single plugin install provides all eight workplan tools, the `workflow-plan` and `workflow-execute` skills, and additive compaction continuity for active workplans. See [`packages/plugin/README.md`](packages/plugin/README.md).
+`packages/plugin` supplies **9 tools, 6 skills, 10 active agents and `/review`**.
+Source prompts and model assignments are unchanged. No root JSON, provider/MCP
+configuration, V1 SDK/entrypoints or compaction hooks are shipped. See
+[`packages/plugin/README.md`](packages/plugin/README.md) for the single-entry install.
 
 ### SWE Workplan Baseline
 
@@ -37,10 +42,11 @@ Available workplan tools:
 - `workplan_inspect` — list stable phase/step ids for targeted updates
 - `workplan_list` / `workplan_read` — discover and inspect existing workplans
 - `workplan_update` — patch phases, steps, files, findings, and notes
+- `workplan_patch` — apply a restricted patch to the linked Markdown plan
 - `workplan_reset` — reset a stale plan or regenerate its markdown
 - `workplan_validate` — validate JSON metadata, linked markdown, and spec files
 
-### MCP Server Integrations
+### Personal MCP config examples — not part of the plugin
 
 - **GitHub Copilot** — Code search and repository intelligence
 - **DeepWiki** — Repository documentation and structure analysis
@@ -95,10 +101,13 @@ for Quarto or direct Pandoc/LaTeX workflows.
 
 This repo has two layers:
 
-1. **OpenCode preset/config layer** — `agents/`, `commands/`, `skills/`, and
-   `opencode.json` define the portable harness experience.
-2. **Optional package layer** — `packages/viz` remains experimental and
-   private; `packages/shared` is reserved for internal helpers.
+1. **Preset source and distribution** — unchanged `agents/`, `commands/`, and
+   `skills/` are compiled/copied into the standalone `packages/plugin` bundle.
+   `packages/shared` supplies workspace-only tool context; private `packages/viz`
+   implements the image tool that is included in the main bundle.
+2. **Personal examples** — `opencode.json`, `opencode.v2.json`,
+   `opencode-mem.jsonc` and `pandoc/` remain repository-only, not host settings
+   imposed by the plugin.
 
 The removed docs package is not part of either layer. Its reusable presentation
 assets survive in the root `pandoc/` directory while Quarto replaces the old
@@ -106,17 +115,108 @@ custom document-tool workflow.
 
 ### Why `viz` exists
 
-`packages/viz` is a placeholder for future visualization features like charts, diagrams, and tables for reports/papers.
+`packages/viz` implements `viz_generate_image`; its code is bundled into the main
+V2 plugin. No separate viz installation is required. Image generation still needs
+an image-capable Responses endpoint/API key configured by the host.
 
-Right now it is:
+## OpenCode V2 preparation
 
-- private
-- not loaded in `opencode.json`
-- not considered part of the stable default harness
+The package is **V2-only**, checked against SDK **2.0.20**. The active personal
+`opencode.json` is left unchanged for the separately installed V1 environment;
+do not load the new package on V1. `opencode.v2.json` is a repo-only personal
+example, not the plugin installer.
 
-Treat `viz` as a future idea or stub, not part of the stable default harness.
+The bundle compiles our unchanged frontmatter at build time, preserves body
+bytes and model IDs/variants, and registers all assets through native transforms.
+Core parsing is build-only; installed users do not need the repository or its
+dev dependencies. Our disabled deprecated agent alias and both compaction
+integrations are excluded.
 
-## Installation
+Matching agent prompts/models/modes/request settings are replaced. Existing
+permission lists are kept and our declared overrides appended; last match wins,
+and unmatched old rules remain. Existing same-name skills and unrelated agents
+are preserved. Global default selection stays unchanged; `/review` intentionally
+switches only its invoking session to `build` and its configured model, as the
+native command semantics require.
+
+### Preflight
+
+```bash
+bun install --frozen-lockfile
+bun run test
+bun run build
+bun run typecheck
+bun run v2:check
+bun run pack:check
+```
+
+`v2:check` validates the native schema, Core normalization, and unchanged
+agent/command frontmatter, then resolves and imports the one local native bundle.
+`pack:check` runs a fresh child process on a clean-room installation and verifies
+all 9 tools, 6 complete skill directories, 10 agents and `/review`, model/prompt
+preservation, no JSON/V1/secrets, and a real workspace-only patch.
+Neither starts OpenCode, makes provider/MCP calls, or changes global config.
+The published editor schema may still describe V1 fields; the version-pinned
+preflight is authoritative for this template.
+
+### Write policy
+
+The plugin entry explicitly enables `trustedWorkspaceWrites` for workspace mutations.
+Without `true`, create/update/reset/patch/image mutations are rejected; read
+tools remain available. Every invocation uses its own session workspace, rejects
+external workspace overrides, and retains the existing path, symlink, patch,
+and overwrite checks.
+
+This is **trusted workspace maintenance**, not V1 permission equivalence:
+individual per-file `edit` allow/ask/deny rules are not evaluated by these tools.
+Mutators declare the `edit` action so V2 can hide them when edits are wholly
+denied. Do not enable trusted writes if you require per-file approvals.
+
+### Compatibility changes in the V2 template
+
+| Integration | V2 treatment |
+|---|---|
+| Notifier | Upgraded to verified V2-compatible `@mohak34/opencode-notifier@0.5.0` |
+| Antigravity auth | Omitted: no verified V2 port; native Google auth is not equivalent to its OAuth/account rotation |
+| Anthropic auth | Omitted: no verified stable V2 port under the configured name; native API-key auth is not Claude subscription OAuth |
+| `opencode-mem` | Omitted: no verified V2 port; `opencode-mem.jsonc` and memory data remain untouched |
+| Background agents | Omitted: use native V2 `subagent`; plugin-specific `delegation_read`/`delegation_list` persistence is not preserved |
+| LSP | V2 accepts the configuration but does not supply LSP tools; use lint/typecheck/compiler checks |
+| `researcher-mcp` | Disabled because `.opencode/researcher-mcp.sh` is absent; restore the launcher before re-enabling |
+| DDG MCP | Existing command pinned to `@oevortex/ddg_search@1.4.0` |
+
+Other MCP endpoints, secret references, and Hound's pinned command are preserved.
+Hound's duplicate search action remains denied. For image generation, keep the
+existing `VIZ_OPENAI_*` / `OPENAI_*` environment settings or configure native
+`providers.openai.settings`; existing V1 provider options still work. The
+default image endpoint/model are unchanged—no OpenCode OAuth credentials are
+automatically converted into an image API key.
+
+### Include in an existing V2 host
+
+1. Add the one package entry from [`packages/plugin/README.md`](packages/plugin/README.md)
+   to the host's existing `plugins` list; use the built checkout path locally or
+   the versioned npm package once published. No agent/skill directories or JSON
+   need to be copied into the host.
+2. Keep the host's providers/auth/MCP/default-agent settings. Ensure it supplies
+   the bundled agent model IDs and external tools referenced by the prompts;
+   configure the image endpoint separately when needed.
+3. Do not also enable separate viz, old workflow/compaction plugins or legacy
+   auto-discovered tool entries; the main V2 bundle already supplies the tools.
+4. Quit and restart OpenCode after activation. Verify live model authentication,
+   MCP connections, and interactive behavior in that host; static package checks
+   intentionally make no provider or service calls.
+
+If using the repository's **personal** V2 example instead, separately audit and
+replace the relevant V1 config. Do not simply overlay it with `OPENCODE_CONFIG`:
+V2 appends plugin lists across layers. That personal migration is not required
+for installing this plugin.
+
+See the official [V1 migration guide](https://opencode.ai/v2/docs/migrate-v1),
+[plugin migration guide](https://opencode.ai/v2/docs/build/plugins/migrate-v1),
+and [plugin loading rules](https://opencode.ai/v2/docs/plugins).
+
+## Personal full-config installation — optional, not plugin distribution
 
 1. **Clone this repository** and install workspace dependencies:
    ```bash

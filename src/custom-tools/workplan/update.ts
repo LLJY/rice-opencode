@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 
-import { tool } from "@opencode-ai/plugin";
+import { tool } from "../tool";
 
 import {
   workplanFindingSchema,

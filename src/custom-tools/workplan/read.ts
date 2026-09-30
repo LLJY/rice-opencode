@@ -1,4 +1,4 @@
-import { tool } from "@opencode-ai/plugin";
+import { tool } from "../tool";
 
 import { formatOutput, readOptionalFile, readWorkplanDocument, resolveLinkedPlanPath, resolveToolWorkspaceRoot } from "./shared";
 

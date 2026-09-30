@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 
-import { tool } from "@opencode-ai/plugin";
+import { tool } from "../tool";
 
 import { assertSafePathAccess, formatOutput, resolveToolWorkspaceRoot, summarize, workplanDirectory } from "./shared";
 import type { DirectoryLikeEntry, WorkplanDocument } from "./types";
