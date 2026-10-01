@@ -111,6 +111,7 @@ const dependencies = {
   ...packageManifest.optionalDependencies,
 };
 assert.equal(dependencies["@opencode/plugin"], "2.0.20");
+assert.equal((packageManifest as unknown as { license: string }).license, "GPL-2.0-only");
 assert.ok(!("@opencode-ai/plugin" in dependencies), "The V1 SDK must not be packaged");
 
 async function filesUnder(directory: string, prefix = ""): Promise<string[]> {
@@ -132,6 +133,8 @@ const sensitiveFiles = payload.filter((path) => {
 });
 assert.deepEqual(rootConfigs, [], "OpenCode config files must not be packaged");
 assert.deepEqual(sensitiveFiles, [], "Secret and environment files must not be packaged");
+assert.match(await readFile(join(packageDirectory, "dist/LICENSE.md"), "utf8"), /GNU GENERAL PUBLIC LICENSE/);
+assert.match(await readFile(join(packageDirectory, "dist/licenses/zod-LICENSE"), "utf8"), /Colin McDonnell/);
 assert.ok(!payload.some((path) => path.includes("docs-first-coder")), "Deprecated docs-first-coder must not be packaged");
 
 for (const [path, base64] of Object.entries(golden.assetFiles)) {

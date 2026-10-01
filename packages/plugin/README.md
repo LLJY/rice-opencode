@@ -14,14 +14,14 @@ SDK **2.0.20**.
 
 ## Install
 
-After publication, add the package to the native V2 `opencode.json`:
+Add the versioned GitHub package to the host's existing native V2 `plugins` list:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "@rice-opencode/plugin@0.1.0",
+      "package": "github:LLJY/rice-opencode#v0.1.0",
       "options": { "trustedWorkspaceWrites": true }
     }
   ]
@@ -29,8 +29,9 @@ After publication, add the package to the native V2 `opencode.json`:
 ```
 
 Add this **one entry** to the host's existing `plugins` list; do not replace its
-config with this repository's JSON. The version above refers to this bundle once
-published; this repository does not publish automatically.
+config with this repository's JSON. No npm account, registry login or GitHub
+token is required for the public Git target. The `v0.1.0` tag contains the built
+package at its root; source development stays on `v2`. There is no npm release.
 
 For a local checkout, run `bun install --frozen-lockfile` and `bun run build`,
 then use the checkout's absolute `packages/plugin` path as `package` (or
@@ -113,3 +114,13 @@ Bun process without the repository or Core dev dependency. It checks all
 9/6/10/+1 registrations, full asset copies, agent replacement, model assignments,
 workspace patching, cancellation, `/review` forwarding, and absence of configs,
 secrets and V1 code. No provider requests or live OpenCode service are started.
+
+## License and source
+
+The plugin is GPL-2.0-only, matching the repository license. Original license
+notices for bundled Zod and skill sidecars are retained. The GitHub release
+provides the built download, corresponding source archive, exact bundled Zod
+source archive, and checksums. To rebuild from the source archive, run
+`bun install --frozen-lockfile && bun run build` at its root; use the package's
+`dist/` output. GitHub's automatic archive of the artifact tag is the built
+package, not the development source snapshot.

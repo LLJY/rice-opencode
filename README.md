@@ -195,8 +195,8 @@ automatically converted into an image API key.
 ### Include in an existing V2 host
 
 1. Add the one package entry from [`packages/plugin/README.md`](packages/plugin/README.md)
-   to the host's existing `plugins` list; use the built checkout path locally or
-   the versioned npm package once published. No agent/skill directories or JSON
+   to the host's existing `plugins` list; use `github:LLJY/rice-opencode#v0.1.0`
+   or the built checkout path locally. No npm account, agent/skill directories or JSON
    need to be copied into the host.
 2. Keep the host's providers/auth/MCP/default-agent settings. Ensure it supplies
    the bundled agent model IDs and external tools referenced by the prompts;

@@ -14,6 +14,10 @@ const packageRoot = resolve(import.meta.dir, "..");
 const repositoryRoot = resolve(packageRoot, "../..");
 const archivePath = join(packageRoot, "rice-opencode-plugin-0.1.0.tgz");
 const cleanRoom = await mkdtemp(join(tmpdir(), "rice-opencode-plugin-"));
+const targetFlag = process.argv.indexOf("--target");
+const target = targetFlag === -1 ? undefined : process.argv[targetFlag + 1];
+assert.ok(targetFlag === -1 || (target && !target.startsWith("--")), "--target requires a Git package target");
+const keep = process.argv.includes("--keep");
 const childPath = join(cleanRoom, "verify-packed-child.ts");
 const goldenPath = join(cleanRoom, "source-golden.json");
 const skillNames = ["agent-use", "frontend-design", "git-commit", "shell-strategy", "workflow-execute", "workflow-plan"];
@@ -149,15 +153,18 @@ async function sourceGolden() {
 }
 
 try {
-  await run(["bun", "run", "build"], packageRoot);
-  await run(["bun", "pm", "pack"], packageRoot);
+  if (!target) {
+    await run(["bun", "run", "build"], packageRoot);
+    await run(["bun", "pm", "pack"], packageRoot);
+  }
   await writeFile(join(cleanRoom, "package.json"), JSON.stringify({ name: "rice-opencode-pack-check", private: true, type: "module" }));
   await writeFile(goldenPath, JSON.stringify(await sourceGolden()));
   await copyFile(join(import.meta.dir, "verify-packed-child.ts"), childPath);
-  await run(["bun", "add", archivePath, "@opencode/plugin@2.0.20"], cleanRoom);
+  await run(["bun", "add", target ?? archivePath, "@opencode/plugin@2.0.20"], cleanRoom);
   const output = await run(["bun", "run", childPath, goldenPath], cleanRoom);
   console.log(output.trim());
+  if (target) console.log(JSON.stringify({ target, cleanRoom, source: "tagged Git package" }));
 } finally {
-  await rm(cleanRoom, { recursive: true, force: true });
-  await rm(archivePath, { force: true });
+  if (!keep) await rm(cleanRoom, { recursive: true, force: true });
+  if (!target) await rm(archivePath, { force: true });
 }

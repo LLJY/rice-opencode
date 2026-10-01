@@ -145,6 +145,9 @@ for (const agent of Object.keys(agents)) {
   );
 }
 await cp(resolve(repositoryRoot, "commands", "review.md"), resolve(outputDirectory, "commands", "review.md"));
+await cp(resolve(repositoryRoot, "LICENSE.md"), resolve(outputDirectory, "LICENSE.md"));
+await mkdir(resolve(outputDirectory, "licenses"), { recursive: true });
+await cp(resolve(repositoryRoot, "node_modules/zod/LICENSE"), resolve(outputDirectory, "licenses/zod-LICENSE"));
 
 const result = await Bun.build({
   entrypoints: [resolve(packageRoot, "src/index.ts")],

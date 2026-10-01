@@ -24,7 +24,7 @@
     "workplan",
     "agent-skills"
   ],
-  "license": "MIT",
+  "license": "GPL-2.0-only",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LLJY/rice-opencode.git",
