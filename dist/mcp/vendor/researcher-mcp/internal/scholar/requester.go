@@ -1,0 +1,324 @@
+package scholar
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"math"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+
+	"googlescholar-mcp-go/internal/config"
+)
+
+type Requester struct {
+	cfg    config.Config
+	client *http.Client
+
+	mu         sync.Mutex
+	lastByHost map[string]time.Time
+	rateGates  map[string]chan struct{}
+	rng        *rand.Rand
+}
+
+func NewRequester(cfg config.Config) *Requester {
+	r := &Requester{
+		cfg:        cfg,
+		lastByHost: make(map[string]time.Time),
+		rng:        rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
+
+	transport := &http.Transport{
+		Proxy: r.proxyForRequest,
+	}
+
+	r.client = &http.Client{
+		Timeout:   cfg.Timeout,
+		Transport: transport,
+	}
+
+	return r
+}
+
+func (r *Requester) proxyForRequest(_ *http.Request) (*url.URL, error) {
+	if len(r.cfg.ProxyList) == 0 {
+		return nil, nil
+	}
+	proxyText := r.randomChoice(r.cfg.ProxyList)
+	if proxyText == "" {
+		return nil, nil
+	}
+	p, err := url.Parse(proxyText)
+	if err != nil {
+		return nil, nil
+	}
+	return p, nil
+}
+
+func (r *Requester) Get(ctx context.Context, rawURL string) ([]byte, int, error) {
+	attempt := 0
+
+	for {
+		attempt++
+		if err := r.sleepForRateLimit(ctx, rawURL); err != nil {
+			return nil, 0, err
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		req.Header.Set("User-Agent", r.pickUserAgent())
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+		req.Header.Set("Connection", "keep-alive")
+
+		resp, err := r.client.Do(req)
+		if err != nil {
+			if attempt >= r.cfg.MaxRetries {
+				return nil, 0, err
+			}
+			if sleepErr := r.sleepForBackoff(ctx, attempt); sleepErr != nil {
+				return nil, 0, sleepErr
+			}
+			continue
+		}
+
+		body, readErr := io.ReadAll(resp.Body)
+		closeErr := resp.Body.Close()
+		if readErr != nil {
+			return nil, resp.StatusCode, readErr
+		}
+		if closeErr != nil {
+			return nil, resp.StatusCode, closeErr
+		}
+
+		if shouldRetryStatus(rawURL, resp.StatusCode) && attempt < r.cfg.MaxRetries {
+			if sleepErr := r.sleepForBackoff(ctx, attempt); sleepErr != nil {
+				return nil, resp.StatusCode, sleepErr
+			}
+			continue
+		}
+
+		return body, resp.StatusCode, nil
+	}
+}
+
+// FetchedDoc is the result of GetDocument: a size-capped body plus the
+// metadata needed to decide how to interpret it.
+type FetchedDoc struct {
+	Body        []byte
+	ContentType string
+	FinalURL    string
+	Status      int
+}
+
+// ErrBodyTooLarge is returned by GetDocument when a response exceeds the
+// configured MaxFetchBytes limit.
+var ErrBodyTooLarge = fmt.Errorf("response body exceeds SCHOLAR_MAX_FETCH_MB limit")
+
+// GetDocument fetches a document (PDF or HTML) with the same rate-limit,
+// retry, and user-agent machinery as Get, but accepts PDFs, caps the body
+// size, and reports the final URL after redirects.
+func (r *Requester) GetDocument(ctx context.Context, rawURL string) (*FetchedDoc, error) {
+	attempt := 0
+
+	for {
+		attempt++
+		if err := r.sleepForRateLimit(ctx, rawURL); err != nil {
+			return nil, err
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("User-Agent", r.pickUserAgent())
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Accept", "application/pdf,text/html;q=0.9,*/*;q=0.8")
+		req.Header.Set("Connection", "keep-alive")
+
+		resp, err := r.client.Do(req)
+		if err != nil {
+			if attempt >= r.cfg.MaxRetries {
+				return nil, err
+			}
+			if sleepErr := r.sleepForBackoff(ctx, attempt); sleepErr != nil {
+				return nil, sleepErr
+			}
+			continue
+		}
+
+		maxBytes := r.cfg.MaxFetchBytes
+		if maxBytes <= 0 {
+			maxBytes = 30 * 1024 * 1024
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+		closeErr := resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		if int64(len(body)) > maxBytes {
+			return nil, ErrBodyTooLarge
+		}
+
+		if shouldRetryStatus(rawURL, resp.StatusCode) && attempt < r.cfg.MaxRetries {
+			if sleepErr := r.sleepForBackoff(ctx, attempt); sleepErr != nil {
+				return nil, sleepErr
+			}
+			continue
+		}
+
+		finalURL := rawURL
+		if resp.Request != nil && resp.Request.URL != nil {
+			finalURL = resp.Request.URL.String()
+		}
+
+		return &FetchedDoc{
+			Body:        body,
+			ContentType: resp.Header.Get("Content-Type"),
+			FinalURL:    finalURL,
+			Status:      resp.StatusCode,
+		}, nil
+	}
+}
+
+func (r *Requester) sleepForRateLimit(ctx context.Context, rawURL string) error {
+	host := hostFromURL(rawURL)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	gate := r.rateLimitGate(host)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-gate:
+	}
+	defer func() { gate <- struct{}{} }()
+
+	r.mu.Lock()
+	last := r.lastByHost[host]
+	delay := r.cfg.MinDelay
+	if r.cfg.MaxDelay > r.cfg.MinDelay {
+		delta := r.cfg.MaxDelay - r.cfg.MinDelay
+		jitter := time.Duration(r.rng.Int63n(int64(delta)))
+		delay = r.cfg.MinDelay + jitter
+	}
+	r.mu.Unlock()
+
+	now := time.Now()
+	target := last.Add(delay)
+	if target.Before(now) {
+		r.mu.Lock()
+		r.lastByHost[host] = now
+		r.mu.Unlock()
+		return nil
+	}
+
+	if err := sleepWithContext(ctx, target.Sub(now)); err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	r.lastByHost[host] = time.Now()
+	r.mu.Unlock()
+	return nil
+}
+
+func (r *Requester) rateLimitGate(host string) chan struct{} {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.rateGates == nil {
+		r.rateGates = make(map[string]chan struct{})
+	}
+	if gate := r.rateGates[host]; gate != nil {
+		return gate
+	}
+
+	gate := make(chan struct{}, 1)
+	gate <- struct{}{}
+	r.rateGates[host] = gate
+	return gate
+}
+
+func (r *Requester) sleepForBackoff(ctx context.Context, attempt int) error {
+	base := math.Pow(r.cfg.BackoffFactor, float64(attempt))
+	r.mu.Lock()
+	jitter := float64(r.cfg.MinDelay) * r.rng.Float64()
+	r.mu.Unlock()
+	d := time.Duration(base*float64(time.Second) + jitter)
+	if d > 30*time.Second {
+		d = 30 * time.Second
+	}
+	return sleepWithContext(ctx, d)
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func shouldRetryStatus(rawURL string, status int) bool {
+	if status != http.StatusTooManyRequests && status != http.StatusForbidden && status != http.StatusServiceUnavailable {
+		return false
+	}
+	return hostFromURL(rawURL) != "scholar.google.com"
+}
+
+func (r *Requester) pickUserAgent() string {
+	if len(r.cfg.UserAgents) == 0 {
+		return "Mozilla/5.0"
+	}
+	if !r.cfg.RotateUserAgents {
+		return r.cfg.UserAgents[0]
+	}
+	return r.randomChoice(r.cfg.UserAgents)
+}
+
+func (r *Requester) randomChoice(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	r.mu.Lock()
+	idx := r.rng.Intn(len(values))
+	r.mu.Unlock()
+	return values[idx]
+}
+
+func hostFromURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
+}
+
+func BuildBlockedError(status int) *ToolError {
+	return &ToolError{
+		Code:    "blocked",
+		Message: fmt.Sprintf("Google Scholar request returned status %d", status),
+		Hint:    "Increase SCHOLAR_MIN_DELAY and SCHOLAR_MAX_DELAY, reduce request volume, or configure SCHOLAR_PROXY_LIST.",
+	}
+}

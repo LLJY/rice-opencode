@@ -1,0 +1,15 @@
+{
+  "revisions": {
+    "hound": "1dab81b7fc03721688cfb7775fc1222c7f9805ba",
+    "researcher-mcp": "61106bcc107074566562d8c0e24c50c938785d96"
+  },
+  "toolchain": "go version go1.27.1-X:nodwarf5 linux/amd64",
+  "targets": [
+    "linux-x64",
+    "linux-arm64",
+    "darwin-x64",
+    "darwin-arm64",
+    "win32-x64",
+    "win32-arm64"
+  ]
+}

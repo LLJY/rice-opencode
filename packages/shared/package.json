@@ -1,6 +1,0 @@
-{
-  "name": "@rice-opencode/shared",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Shared workspace-only tool integration for OpenCode V2"
-}

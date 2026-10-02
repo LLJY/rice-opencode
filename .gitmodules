@@ -1,6 +1,0 @@
-[submodule "researcher-mcp"]
-	path = packages/mcp/vendor/researcher-mcp
-	url = https://github.com/hoshinoht/researcher-mcp.git
-[submodule "hound"]
-	path = packages/mcp/vendor/hound
-	url = https://github.com/dondai1234/master-fetch.git
