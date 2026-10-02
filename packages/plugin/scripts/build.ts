@@ -9,6 +9,7 @@ import { Agent } from "@opencode/schema/agent";
 import { Info as ConfigAgentInfo } from "@opencode/schema/config/agent";
 import { Model } from "@opencode/schema/model";
 import { Schema } from "effect";
+import { buildMcp } from "./build-mcp";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(packageRoot, "../..");
@@ -148,6 +149,7 @@ await cp(resolve(repositoryRoot, "commands", "review.md"), resolve(outputDirecto
 await cp(resolve(repositoryRoot, "LICENSE.md"), resolve(outputDirectory, "LICENSE.md"));
 await mkdir(resolve(outputDirectory, "licenses"), { recursive: true });
 await cp(resolve(repositoryRoot, "node_modules/zod/LICENSE"), resolve(outputDirectory, "licenses/zod-LICENSE"));
+await buildMcp(repositoryRoot, outputDirectory);
 
 const result = await Bun.build({
   entrypoints: [resolve(packageRoot, "src/index.ts")],

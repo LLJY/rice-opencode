@@ -142,6 +142,7 @@ native command semantics require.
 ### Preflight
 
 ```bash
+git submodule update --init --recursive
 bun install --frozen-lockfile
 bun run test
 bun run build
@@ -149,6 +150,25 @@ bun run typecheck
 bun run v2:check
 bun run pack:check
 ```
+
+### Automatic MCPs — v0.2.0
+
+Version `v0.2.0` bundles pinned Researcher/Hound submodules and
+registers absent servers automatically through OpenCode. Hound uses a locked
+Python/browser cache prepared in the background; plugin users need `uv`, while
+source builds additionally need Go 1.25+. Exa is the default general-search MCP
+for bundled agents and requires `EXA_API_KEY` or the existing `.exa-api-key` file.
+Missing keys warn without blocking other features; there is no anonymous fallback.
+
+Existing host definitions—including disabled servers—are preserved. Remove
+those entries manually if you want the managed versions; the personal V2 example
+already defines all three names. No host JSON or source prompts are changed.
+See [automatic research MCPs](packages/plugin/README.md#automatic-research-mcps--v020)
+for cache/options/prerequisites and browser limitations.
+
+Run `bun run mcp:check` for isolated real stdio/catalog verification (downloads
+dependencies/Chromium, but makes no search/model/paid Exa calls). The older
+`v0.1.0` release remains unchanged.
 
 `v2:check` validates the native schema, Core normalization, and unchanged
 agent/command frontmatter, then resolves and imports the one local native bundle.
@@ -195,7 +215,7 @@ automatically converted into an image API key.
 ### Include in an existing V2 host
 
 1. Add the one package entry from [`packages/plugin/README.md`](packages/plugin/README.md)
-   to the host's existing `plugins` list; use `github:LLJY/rice-opencode#v0.1.0`
+    to the host's existing `plugins` list; use `github:LLJY/rice-opencode#v0.2.0`
    or the built checkout path locally. No npm account, agent/skill directories or JSON
    need to be copied into the host.
 2. Keep the host's providers/auth/MCP/default-agent settings. Ensure it supplies

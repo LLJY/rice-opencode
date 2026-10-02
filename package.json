@@ -14,7 +14,8 @@
     "test": "bun run build && bun test ./tests ./packages",
     "typecheck": "bun run build && tsc --noEmit",
     "pack:check": "bun run --cwd packages/plugin pack:check",
-    "v2:check": "bun run build && bun run ./scripts/check-v2.ts"
+    "v2:check": "bun run build && bun run ./scripts/check-v2.ts",
+    "mcp:check": "bun run build && bun run ./scripts/check-mcp.ts"
   },
   "dependencies": {
     "@opencode/plugin": "2.0.20",

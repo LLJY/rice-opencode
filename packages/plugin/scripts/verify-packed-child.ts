@@ -136,6 +136,21 @@ assert.deepEqual(sensitiveFiles, [], "Secret and environment files must not be p
 assert.match(await readFile(join(packageDirectory, "dist/LICENSE.md"), "utf8"), /GNU GENERAL PUBLIC LICENSE/);
 assert.match(await readFile(join(packageDirectory, "dist/licenses/zod-LICENSE"), "utf8"), /Colin McDonnell/);
 assert.ok(!payload.some((path) => path.includes("docs-first-coder")), "Deprecated docs-first-coder must not be packaged");
+const mcpDirectory = join(packageDirectory, "dist/mcp");
+const mcpSources = JSON.parse(await readFile(join(mcpDirectory, "sources.json"), "utf8")) as {
+  revisions: Record<string, string>; targets: string[];
+};
+assert.equal(mcpSources.revisions.hound, "1dab81b7fc03721688cfb7775fc1222c7f9805ba");
+assert.equal(mcpSources.revisions["researcher-mcp"], "61106bcc107074566562d8c0e24c50c938785d96");
+assert.equal(mcpSources.targets.length, 6);
+for (const target of mcpSources.targets) {
+  const executable = join(mcpDirectory, "bin", target, `researcher-mcp${target.startsWith("win32") ? ".exe" : ""}`);
+  assert.ok((await readFile(executable)).length > 0, `Missing ${target} researcher binary`);
+}
+for (const path of ["pyproject.toml", "uv.lock", "vendor/hound/LICENSE", "vendor/hound/NOTICE.ddgs.txt", "vendor/researcher-mcp/LICENSE", "vendor/researcher-mcp/go.mod"]) {
+  assert.ok((await readFile(join(mcpDirectory, path))).length > 0, `Missing MCP dependency asset: ${path}`);
+}
+assert.ok(!payload.some((path) => path.split("/").includes(".git")), "Submodule Git state must not be packaged");
 
 for (const [path, base64] of Object.entries(golden.assetFiles)) {
   const installedPath = resolve(packageDirectory, path);
@@ -229,7 +244,7 @@ function makeFixture() {
   const sessionModels = new Map<string, AgentState["model"]>();
   const promptModels: Array<AgentState["model"]> = [];
   const prompts: Array<Record<string, unknown>> = [];
-  const options: Record<string, unknown> = { trustedWorkspaceWrites: true };
+  const options: Record<string, unknown> = { trustedWorkspaceWrites: true, mcp: false };
   let globalDefault = "host-default";
   let defaultChanges = 0;
 

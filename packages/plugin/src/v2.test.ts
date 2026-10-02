@@ -18,6 +18,7 @@ import type { AgentEditor } from "@opencode/plugin/promise/agent";
 import type { CommandDefinition, CommandEditor } from "@opencode/plugin/promise/command";
 import type { SkillEditor } from "@opencode/plugin/promise/skill";
 import type { ToolEditor } from "@opencode/plugin/promise/tool";
+import type { MCPEditor } from "@opencode/plugin/promise/mcp";
 
 import RicePluginV2 from "./v2";
 
@@ -115,6 +116,10 @@ function makePluginContext(
   const skills = new Map(existingSkills.map((skill) => [skill.id, skill]));
   const agents = new Map<string, TestAgent>(existingAgents.map((agent) => [agent.id, agent]));
   const commands = new Map<string, TestCommand>();
+  const mcpServers = new Map<string, NonNullable<ReturnType<MCPEditor["get"]>>>([
+    ["hound", { type: "local", command: ["host-hound"], disabled: true }],
+    ["exa", { type: "remote", url: "https://mcp.exa.ai/mcp", disabled: true }],
+  ]);
   const initialAgents = new Map([...agents].map(([id, agent]) => [id, structuredClone(agent)]));
   const switchedAgents: Array<{ sessionID: string; agent: string }> = [];
   const switchedModels: Array<{ sessionID: string; model: NonNullable<TestAgent["model"]> }> = [];
@@ -130,7 +135,19 @@ function makePluginContext(
   let commandTransforms = 0;
 
   const context = {
-    options,
+    options: { mcp: false, ...options },
+    location: { directory: repositoryRoot },
+    mcp: {
+      async transform(callback: (editor: MCPEditor) => void) {
+        callback({
+          list: () => [...mcpServers.entries()],
+          get: (name) => mcpServers.get(name),
+          set: (name, config) => { mcpServers.set(name, structuredClone(config) as NonNullable<ReturnType<MCPEditor["get"]>>); },
+          update: (name, update) => { const config = mcpServers.get(name); if (config) update(config); },
+          remove: (name) => { mcpServers.delete(name); },
+        });
+      },
+    },
     session: {
       async get({ sessionID }: { sessionID: string }) {
         sessionLookups += 1;
@@ -203,6 +220,7 @@ function makePluginContext(
     skills,
     agents,
     commands,
+    mcpServers,
     initialAgents,
     switchedAgents,
     switchedModels,
@@ -256,6 +274,24 @@ function copiedFiles(directory: string): string[] {
 }
 
 describe("RicePluginV2", () => {
+  it("wires MCP registration and Exa search policy without changing source prompts or unrelated agents", async () => {
+    const host = makePluginContext({}, { mcp: true }, [], seededAgents());
+    const unrelatedPermissions = structuredClone(host.agents.get("unrelated")!.permissions);
+    const cleanup = await RicePluginV2.setup(host.context);
+    expect(host.tools.size).toBe(9);
+    expect(host.mcpServers.get("researcher-mcp")).toMatchObject({ type: "local", codemode: false });
+    expect(host.mcpServers.get("hound")).toMatchObject({ command: ["host-hound"], disabled: true });
+    expect(host.mcpServers.get("exa")).toMatchObject({ disabled: true });
+    for (const name of agentNames) {
+      expect(host.agents.get(name)!.permissions.at(-1)).toEqual({ action: "hound_*smart_search", resource: "*", effect: "deny" });
+      const source = readFileSync(join(repositoryRoot, "agents", `${name}.md`), "utf8");
+      expect(host.agents.get(name)!.system).toBe(/^---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/.exec(source)![1]);
+    }
+    expect(host.agents.get("unrelated")!.permissions).toEqual(unrelatedPermissions);
+    expect(host.defaultChanges).toBe(0);
+    await cleanup?.();
+  });
+
   it("registers nine tools, six bundled skills, ten agents and review without replacing user skills", async () => {
     const root = tempDirectory();
     const userSkill = { id: "workflow-plan", name: "workflow-plan", content: "user content" };

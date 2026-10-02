@@ -18,7 +18,7 @@
     },
     "packages/plugin": {
       "name": "@rice-opencode/plugin",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@opencode/plugin": "2.0.20",
         "zod": "4.6.5",

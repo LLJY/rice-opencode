@@ -7,6 +7,7 @@ import type { Info as AgentInfo } from "@opencode/schema/agent";
 // @ts-expect-error Generated before bundling; its structure is declared below.
 import presetData from "../dist/preset.js";
 import { createWorkspaceTool } from "../../shared/src/v2-tool";
+import { registerMcp } from "./mcp";
 import { viz_generate_image } from "../../viz/src/plugin";
 import {
   create as workplan_create,
@@ -85,6 +86,9 @@ export const RicePluginV2 = Plugin.define({
           agent.hidden = definition.hidden;
           agent.request = structuredClone(definition.request);
           agent.permissions.push(...structuredClone(definition.permissions));
+          if (context.options.mcp !== false) {
+            agent.permissions.push({ action: "hound_*smart_search", resource: "*", effect: "deny" });
+          }
 
           if (definition.model === undefined) delete agent.model;
           else agent.model = structuredClone(definition.model);
@@ -117,6 +121,7 @@ export const RicePluginV2 = Plugin.define({
         },
       });
     });
+    return registerMcp(context, distDirectory);
   },
 });
 

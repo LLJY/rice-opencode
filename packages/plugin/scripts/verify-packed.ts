@@ -12,7 +12,8 @@ import { Schema } from "effect";
 
 const packageRoot = resolve(import.meta.dir, "..");
 const repositoryRoot = resolve(packageRoot, "../..");
-const archivePath = join(packageRoot, "rice-opencode-plugin-0.1.0.tgz");
+const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")) as { name: string; version: string };
+const archivePath = join(packageRoot, `${manifest.name.replace(/^@/, "").replace("/", "-")}-${manifest.version}.tgz`);
 const cleanRoom = await mkdtemp(join(tmpdir(), "rice-opencode-plugin-"));
 const targetFlag = process.argv.indexOf("--target");
 const target = targetFlag === -1 ? undefined : process.argv[targetFlag + 1];
@@ -163,6 +164,7 @@ try {
   await run(["bun", "add", target ?? archivePath, "@opencode/plugin@2.0.20"], cleanRoom);
   const output = await run(["bun", "run", childPath, goldenPath], cleanRoom);
   console.log(output.trim());
+  if (keep) console.log(JSON.stringify({ cleanRoom }));
   if (target) console.log(JSON.stringify({ target, cleanRoom, source: "tagged Git package" }));
 } finally {
   if (!keep) await rm(cleanRoom, { recursive: true, force: true });
